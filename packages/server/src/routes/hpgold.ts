@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
+import { db } from '../db/index.js';
+import { getHpGold } from '../analytics/hpgold.js';
 
 const router = new Hono();
 
-// TODO: implement routes for this module
-// See PLANS.md for the full API design
+router.get('/', (c) => {
+  const character = c.req.query('character') || undefined;
+  return c.json({ floors: getHpGold(db, character) });
+});
 
 export default router;

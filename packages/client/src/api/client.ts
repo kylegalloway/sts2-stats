@@ -21,6 +21,11 @@ export const api = {
     get('/synergies', { ...(character ? { character } : {}), min_occurrences: String(minOccurrences) }),
   getHpGold: (character?: string) => get('/hp-gold', character ? { character } : {}),
   getKills: (character?: string) => get('/kills', character ? { character } : {}),
-  getActRoutes: () => get('/act-routes'),
+  getActRoutes: () => get('/overview/act-routes'),
+  getAscensionStats: (character?: string) => get('/overview/ascension', character ? { character } : {}),
+  getPathComposition: (character?: string) => get('/overview/path-composition', character ? { character } : {}),
+  getBossStats: (character?: string) => get('/kills/bosses', character ? { character } : {}),
+  getCardSkipRates: (character?: string) => get('/cards/skip-rates', character ? { character } : {}),
+  getPotions: (character?: string) => get('/potions', character ? { character } : {}),
   getStatus: () => get('/status'),
 };

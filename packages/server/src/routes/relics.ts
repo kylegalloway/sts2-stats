@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
+import { db } from '../db/index.js';
+import { getRelicStats } from '../analytics/relics.js';
 
 const router = new Hono();
 
-// TODO: implement routes for this module
-// See PLANS.md for the full API design
+router.get('/', (c) => {
+  const character = c.req.query('character') || undefined;
+  return c.json({ relics: getRelicStats(db, character) });
+});
 
 export default router;

@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# SQLite database
+*.db
+
+# SQLite WAL/SHM sidecar files
+*.db-shm
+*.db-wal

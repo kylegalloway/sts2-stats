@@ -4,3 +4,4 @@ export * from './synergies.js';
 export * from './overview.js';
 export * from './hpgold.js';
 export * from './kills.js';
+export * from './inflection.js';

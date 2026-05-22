@@ -41,6 +41,28 @@ export interface RelicObtained {
   act: string;
 }
 
+export interface DamageFloor {
+  floor: number;
+  room_type: string | null;
+  encounter_id: string | null;
+  damage_taken: number;
+}
+
+export interface FloorNode {
+  floor: number;
+  node_type: string | null;
+  encounter_id: string | null;
+  act: string;
+}
+
+export interface PotionEvent {
+  floor: number;
+  room_type: string | null;
+  act: string;
+  potion_id: string;
+  event_type: 'obtained' | 'declined' | 'used' | 'discarded';
+}
+
 export interface NormalizedRun {
   file_name: string;
   character: string;
@@ -54,9 +76,12 @@ export interface NormalizedRun {
   acts: string[];
   card_choices: CardChoice[];
   relics_obtained: RelicObtained[];
+  damage_per_floor: DamageFloor[];
+  floor_nodes: FloorNode[];
   hp_per_floor: (number | null)[];
   max_hp_per_floor: (number | null)[];
   gold_per_floor: (number | null)[];
+  potion_events: PotionEvent[];
 }
 
 export function normalizeRun(raw: Record<string, unknown>, fileName: string): NormalizedRun {
@@ -75,6 +100,9 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
   const goldPerFloor: (number | null)[] = [];
   const cardChoices: CardChoice[] = [];
   const relicsMap = new Map<string, RelicObtained>();
+  const damagePerFloor: DamageFloor[] = [];
+  const floorNodes: FloorNode[] = [];
+  const potionEvents: PotionEvent[] = [];
 
   for (let idx = 0; idx < points.length; idx++) {
     const pt = points[idx];
@@ -83,19 +111,32 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     const psList = (pt.player_stats as Record<string, unknown>[] | undefined) ?? [];
     const ps = psList[0] ?? {};
 
+    const roomsRaw = (pt.rooms as Record<string, unknown>[] | undefined) ?? [];
+    const firstRoom = roomsRaw[0] ?? {};
+    const roomType = (firstRoom.room_type as string | null) ?? null;
+    const encounterRaw = (firstRoom.model_id as string | null) ?? null;
+    const encounterId = encounterRaw ? cleanId(encounterRaw, 'ENCOUNTER.') : null;
+    const damageTaken = (g(ps, 'damage_taken') as number | null) ?? 0;
+    damagePerFloor.push({ floor, room_type: roomType, encounter_id: encounterId, damage_taken: damageTaken });
+
+    const nodeType = roomType
+      ? roomType.replace(/^ROOM_TYPE\./i, '').replace(/_ROOM$/i, '').toLowerCase()
+      : null;
+    floorNodes.push({ floor, node_type: nodeType, encounter_id: encounterId, act });
+
     hpPerFloor.push((g(ps, 'current_hp') as number | null) ?? null);
     maxHpPerFloor.push((g(ps, 'max_hp') as number | null) ?? null);
     goldPerFloor.push((g(ps, 'current_gold') as number | null) ?? null);
 
     const choicesRaw = (ps.card_choices as Record<string, unknown>[] | undefined) ?? [];
-    for (const choice of choicesRaw) {
-      const cards = (choice.cards as Record<string, unknown>[] | undefined) ?? [];
+    if (choicesRaw.length > 0) {
       let picked: string | null = null;
       const notPicked: string[] = [];
-      for (const card of cards) {
-        const id = cleanId((g(card, 'id') as string | null) ?? '', 'CARD.');
-        if (g(card, 'was_picked')) picked = id;
-        else notPicked.push(id);
+      for (const entry of choicesRaw) {
+        const cardObj = (entry.card as Record<string, unknown> | null) ?? {};
+        const id = cleanId((g(cardObj, 'id') as string | null) ?? '', 'CARD.');
+        if (entry.was_picked) picked = id;
+        else if (id) notPicked.push(id);
       }
       cardChoices.push({ floor, picked, not_picked: notPicked, act });
     }
@@ -106,6 +147,19 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
       if (key && !relicsMap.has(key)) {
         relicsMap.set(key, { key, floor, act });
       }
+    }
+
+    for (const pc of (ps.potion_choices as Record<string, unknown>[] | undefined) ?? []) {
+      const potionId = cleanId((pc.choice as string | null) ?? '', 'POTION.');
+      if (potionId) potionEvents.push({ floor, room_type: roomType, act, potion_id: potionId, event_type: pc.was_picked ? 'obtained' : 'declined' });
+    }
+    for (const p of (ps.potion_used as string[] | undefined) ?? []) {
+      const potionId = cleanId(p, 'POTION.');
+      if (potionId) potionEvents.push({ floor, room_type: roomType, act, potion_id: potionId, event_type: 'used' });
+    }
+    for (const p of (ps.potion_discarded as string[] | undefined) ?? []) {
+      const potionId = cleanId(p, 'POTION.');
+      if (potionId) potionEvents.push({ floor, room_type: roomType, act, potion_id: potionId, event_type: 'discarded' });
     }
   }
 
@@ -133,8 +187,11 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     acts,
     card_choices: cardChoices,
     relics_obtained: Array.from(relicsMap.values()),
+    damage_per_floor: damagePerFloor,
+    floor_nodes: floorNodes,
     hp_per_floor: hpPerFloor,
     max_hp_per_floor: maxHpPerFloor,
     gold_per_floor: goldPerFloor,
+    potion_events: potionEvents,
   };
 }

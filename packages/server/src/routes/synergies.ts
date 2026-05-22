@@ -1,8 +1,13 @@
 import { Hono } from 'hono';
+import { db } from '../db/index.js';
+import { getSynergies } from '../analytics/synergies.js';
 
 const router = new Hono();
 
-// TODO: implement routes for this module
-// See PLANS.md for the full API design
+router.get('/', (c) => {
+  const character = c.req.query('character') || undefined;
+  const minOcc = parseInt(c.req.query('min_occurrences') || '2', 10);
+  return c.json({ synergies: getSynergies(db, character, minOcc) });
+});
 
 export default router;

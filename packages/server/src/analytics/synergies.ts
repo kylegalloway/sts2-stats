@@ -13,7 +13,7 @@ export interface Synergy {
 export function getSynergies(
   db: Database.Database,
   character?: string,
-  minOccurrences = 2
+  minOccurrences = 5
 ): Synergy[] {
   const charFilter = character ? 'AND r.character = ?' : '';
   const params: unknown[] = [minOccurrences];

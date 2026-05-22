@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { normalizeRun } from './normalize.js';
 import { rebuildElo } from '../analytics/cards.js';
+import { rebuildInflection } from '../analytics/inflection.js';
 
 export type IngestResult = 'inserted' | 'skipped' | 'error';
 
@@ -16,6 +17,7 @@ export function ingestRun(db: Database.Database, filePath: string): IngestResult
 
     insertRun(db, run, raw);
     rebuildElo(db, run.character);
+    rebuildInflection(db);
     db.prepare(`INSERT INTO ingestion_log (file_name, status) VALUES (?, 'ok')`).run(fileName);
     return 'inserted';
   } catch (err) {
@@ -53,6 +55,21 @@ function insertRun(db: Database.Database, run: ReturnType<typeof normalizeRun>, 
     VALUES (@run_id, @floor, @hp, @max_hp, @gold)
   `);
 
+  const insertDamage = db.prepare(`
+    INSERT OR IGNORE INTO damage_per_floor (run_id, floor, room_type, encounter_id, damage_taken)
+    VALUES (@run_id, @floor, @room_type, @encounter_id, @damage_taken)
+  `);
+
+  const insertFloorNode = db.prepare(`
+    INSERT OR IGNORE INTO floor_nodes (run_id, floor, node_type, encounter_id, act)
+    VALUES (@run_id, @floor, @node_type, @encounter_id, @act)
+  `);
+
+  const insertPotion = db.prepare(`
+    INSERT INTO potion_events (run_id, floor, room_type, act, potion_id, event_type)
+    VALUES (@run_id, @floor, @room_type, @act, @potion_id, @event_type)
+  `);
+
   db.transaction(() => {
     const { lastInsertRowid } = insertRunStmt.run({
       ...run,
@@ -83,6 +100,18 @@ function insertRun(db: Database.Database, run: ReturnType<typeof normalizeRun>, 
         max_hp: run.max_hp_per_floor[i],
         gold: run.gold_per_floor[i],
       });
+    }
+
+    for (const d of run.damage_per_floor) {
+      insertDamage.run({ run_id: runId, ...d });
+    }
+
+    for (const n of run.floor_nodes) {
+      insertFloorNode.run({ run_id: runId, ...n });
+    }
+
+    for (const pe of run.potion_events) {
+      insertPotion.run({ run_id: runId, ...pe });
     }
   })();
 }
