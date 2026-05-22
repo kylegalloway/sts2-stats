@@ -20,6 +20,9 @@ const CANDIDATE_PATTERNS = [
 ];
 
 export async function resolveHistoryDir(profile = 1): Promise<string | null> {
+  if (process.env.STS2_HISTORY_DIR) {
+    return process.env.STS2_HISTORY_DIR;
+  }
   for (const pattern of CANDIDATE_PATTERNS) {
     const expanded = pattern.replace('{p}', String(profile)).replace('~', os.homedir());
     const matches = await glob(expanded);

@@ -19,6 +19,18 @@ router.get('/cached/cards', (c) => {
   return c.json(result);
 });
 
+router.get('/cached/relics', (c) => {
+  const rows = db.prepare(
+    `SELECT entity_id, data_json FROM spire_codex_cache WHERE entity_type = 'relic'`
+  ).all() as { entity_id: string; data_json: string }[];
+
+  const result = rows.map((r) => {
+    const d = JSON.parse(r.data_json) as { rarity?: string };
+    return { id: r.entity_id, rarity: d.rarity ?? null };
+  });
+  return c.json(result);
+});
+
 router.post('/seed-cards', async (c) => {
   try {
     const inserted = await warmCodexCards(db, true);

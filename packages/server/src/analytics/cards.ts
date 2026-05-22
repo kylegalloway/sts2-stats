@@ -368,7 +368,7 @@ export function getCardStatsByDimension(
       COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id || ':' || cc.card_id END) AS total_picked,
       CAST(COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id || ':' || cc.card_id END) AS REAL) /
         NULLIF(COUNT(DISTINCT cc.run_id || ':' || cc.card_id), 0) AS pick_rate,
-      CAST(SUM(CASE WHEN cc.was_picked = 1 THEN r.victory ELSE 0 END) AS REAL) /
+      CAST(COUNT(DISTINCT CASE WHEN cc.was_picked = 1 AND r.victory = 1 THEN cc.run_id END) AS REAL) /
         NULLIF(COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id END), 0) AS win_rate,
       AVG(ce.elo) AS avg_elo
     FROM card_choices cc

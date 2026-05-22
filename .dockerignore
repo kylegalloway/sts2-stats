@@ -1,0 +1,14 @@
+node_modules
+packages/*/node_modules
+packages/*/dist
+*.db
+*.db-shm
+*.db-wal
+.git
+.gitignore
+test-results
+playwright-report
+e2e
+archived_python_impl
+*.log
+.claude

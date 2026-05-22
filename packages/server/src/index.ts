@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { db } from './db/index.js';
@@ -21,7 +22,7 @@ const app = new Hono();
 // SSE clients set — broadcast watch events to all connected browsers
 const sseClients = new Set<(event: WatchEvent) => void>();
 
-const CLIENT_ORIGIN = process.env.E2E === '1' ? 'http://localhost:5174' : 'http://localhost:5173';
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? (process.env.E2E === '1' ? 'http://localhost:5174' : 'http://localhost:5173');
 
 app.use('*', async (c, next) => {
   c.res.headers.set('Access-Control-Allow-Origin', CLIENT_ORIGIN);
@@ -74,9 +75,16 @@ app.get('/api/events', (c) => {
   });
 });
 
-app.get('/', (c) => c.text('STS2 Stats API — see /api/status'));
+// Serve pre-built client assets in production (STATIC_DIR set by Docker entrypoint)
+if (process.env.STATIC_DIR) {
+  app.use('/*', serveStatic({ root: process.env.STATIC_DIR }));
+  app.get('/*', (c) => c.newResponse(null, 404));
+} else {
+  app.get('/', (c) => c.text('STS2 Stats API — see /api/status'));
+}
 
 const PORT = Number(process.env.PORT ?? 3001);
+const HOSTNAME = process.env.HOSTNAME ?? 'localhost';
 
 const broadcastEvent = (event: WatchEvent) => {
   console.log('[watcher]', event);
@@ -87,8 +95,8 @@ setBroadcast(broadcastEvent);
 
 startWatcher(db, broadcastEvent);
 
-serve({ fetch: app.fetch, port: PORT }, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+serve({ fetch: app.fetch, port: PORT, hostname: HOSTNAME }, () => {
+  console.log(`Server running on http://${HOSTNAME}:${PORT}`);
 });
 
 if (process.env.E2E !== '1') {

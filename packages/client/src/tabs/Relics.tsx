@@ -17,11 +17,14 @@ interface RelicStat {
   avg_floor: number | null;
 }
 
+const RARITIES = ['Common', 'Ancient', 'Starter'];
+
 const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 
 export default function Relics() {
   const { selectedCharacter, setSelectedCharacter } = useStore();
   const [search, setSearch] = useState('');
+  const [selectedRarity, setSelectedRarity] = useState('');
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -36,15 +39,33 @@ export default function Relics() {
     queryFn: () => api.getRelics(selectedCharacter || undefined) as Promise<{ relics: RelicStat[] }>,
   });
 
+  const { data: cachedRelics } = useQuery<{ id: string; rarity: string | null }[]>({
+    queryKey: ['codex-cached-relics'],
+    queryFn: () => api.getCodexCachedRelics(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const relicRarityMap = new Map<string, string>(
+    (cachedRelics ?? []).flatMap((r) => {
+      if (!r.rarity) return [];
+      const tier = r.rarity.replace(/ Relic$/i, '');
+      return [[formatName(r.id), tier]];
+    })
+  );
+
   if (isLoading) return <div className="loading">Loading…</div>;
   if (!data) return null;
 
-  const topQuality = [...data.relics]
+  const filteredRelics = selectedRarity
+    ? data.relics.filter((r) => relicRarityMap.get(formatName(r.relic_key)) === selectedRarity)
+    : data.relics;
+
+  const topQuality = [...filteredRelics]
     .filter((r) => r.quality_score != null)
     .sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0))
     .slice(0, 20);
 
-  const topWR = [...data.relics]
+  const topWR = [...filteredRelics]
     .filter((r) => r.win_rate != null && r.obtain_count >= 2)
     .sort((a, b) => (b.win_rate ?? 0) - (a.win_rate ?? 0))
     .slice(0, 20);
@@ -73,6 +94,15 @@ export default function Relics() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Rarity</span>
+          <select value={selectedRarity} onChange={(e) => setSelectedRarity(e.target.value)}>
+            <option value="">All</option>
+            {RARITIES.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span className="ctrl-label">Search</span>
           <input
@@ -109,11 +139,11 @@ export default function Relics() {
       <div className="tcard">
         <div className="tcard-head">
           <span className="tcard-title">All Relics</span>
-          <span className="dim" style={{ fontSize: '.75rem' }}>{data.relics.length} relics</span>
+          <span className="dim" style={{ fontSize: '.75rem' }}>{filteredRelics.length} relics</span>
         </div>
         <SortableTable
           columns={cols}
-          rows={data.relics}
+          rows={filteredRelics}
           defaultSortKey="quality_score"
           filterText={search}
           filterKeys={['relic_key']}

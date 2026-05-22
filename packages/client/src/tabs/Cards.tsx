@@ -67,7 +67,7 @@ const delta = (v: number | null) => {
   return `${sign}${v.toFixed(1)}`;
 };
 
-const RARITIES = ['Common', 'Uncommon', 'Rare', 'Starter'];
+const RARITIES = ['Common', 'Uncommon', 'Rare', 'Basic', 'Ancient', 'Curse', 'Status'];
 
 export default function Cards() {
   const { selectedCharacter, setSelectedCharacter } = useStore();
@@ -138,13 +138,18 @@ export default function Cards() {
   if (isLoading) return <div className="loading">Loading…</div>;
   if (!data) return null;
 
-  const topElo = data.elo.slice(0, 20);
-  const topQuality = [...data.cards]
+  const inRarity = (cardId: string) =>
+    !selectedRarity || rarityMap.get(formatName(cardId)) === selectedRarity;
+
+  const filteredCards = data.cards.filter((c) => inRarity(c.card_id));
+
+  const topElo = data.elo.filter((c) => inRarity(c.card_id)).slice(0, 20);
+  const topQuality = [...filteredCards]
     .filter((c) => c.quality_score != null)
     .sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0))
     .slice(0, 20);
 
-  const prog = data.progression ?? [];
+  const prog = (data.progression ?? []).filter((c) => inRarity(c.card_id));
   const topOverrated = [...prog]
     .filter((c) => c.overrated_score > 0)
     .sort((a, b) => b.overrated_score - a.overrated_score)
@@ -153,10 +158,6 @@ export default function Cards() {
     .filter((c) => c.underrated_score > 0)
     .sort((a, b) => b.underrated_score - a.underrated_score)
     .slice(0, 15);
-
-  const filteredCards = selectedRarity
-    ? data.cards.filter((c) => rarityMap.get(formatName(c.card_id)) === selectedRarity)
-    : data.cards;
 
   const mainCols: Column<CardStat>[] = [
     {

@@ -247,7 +247,7 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     was_abandoned: Boolean(g(raw, 'was_abandoned')),
     build_id: (g(raw, 'build_id') as string | null) ?? null,
     deck_size: deckRaw.length,
-    cards_upgraded: cardsUpgraded,
+    cards_upgraded: finalDeck.filter((c) => c.upgrade_level > 0).length,
     cards_removed_count: cardsRemovedCount,
     cards_transformed: cardsTransformed,
     campfire_smiths: campfireSmiths,

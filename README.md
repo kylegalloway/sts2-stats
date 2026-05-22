@@ -67,6 +67,65 @@ This starts both the API server (`http://localhost:3001`) and the Vite dev serve
 npm run build
 ```
 
+### Run with Docker
+
+The Docker image builds both the server and client, serves everything from a single container on port 3001, and watches a mounted save directory for new `.run` files.
+
+**Build the image:**
+
+```bash
+docker build -t sts2-stats .
+```
+
+**Run the container:**
+
+```bash
+docker run -d \
+  --name sts2-stats \
+  -p 3001:3001 \
+  -v sts2-data:/data \
+  -v "/path/to/your/STS2/history:/saves:ro" \
+  sts2-stats
+```
+
+Then open `http://localhost:3001` in your browser.
+
+**Volume mounts:**
+
+| Mount | Purpose |
+|---|---|
+| `/data` | SQLite database (`sts2.db`). Use a named volume so data persists across container restarts. |
+| `/saves` | Your STS2 run history directory (read-only). The container watches this for new `.run` files. |
+
+**Finding your history directory:**
+
+| OS | Default path |
+|---|---|
+| macOS | `~/Library/Application Support/SlayTheSpire2/steam/<id>/profile1/saves/history` |
+| Linux | `~/.local/share/SlayTheSpire2/steam/<id>/profile1/saves/history` |
+| Windows | `%APPDATA%\SlayTheSpire2\steam\<id>\profile1\saves\history` |
+
+**macOS example (auto-expanding the glob):**
+
+```bash
+HISTORY=$(ls -d "$HOME/Library/Application Support/SlayTheSpire2/steam/"*/profile1/saves/history 2>/dev/null | head -1)
+docker run -d \
+  --name sts2-stats \
+  -p 3001:3001 \
+  -v sts2-data:/data \
+  -v "$HISTORY:/saves:ro" \
+  sts2-stats
+```
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3001` | Port the server listens on |
+| `DB_PATH` | `/data/sts2.db` | Absolute path to the SQLite database file |
+| `STS2_HISTORY_DIR` | `/saves` | Directory watched for `.run` files |
+| `CLIENT_ORIGIN` | `*` | CORS `Access-Control-Allow-Origin` header value |
+
 ## Project structure
 
 ```

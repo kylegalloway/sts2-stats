@@ -148,6 +148,10 @@ tr:hover td { background: rgba(201,144,60,.07) !important; }
 /* ── Controls ── */
 .controls { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
 .ctrl-label { font-size: .75rem; color: var(--muted); white-space: nowrap; }
+.seg-group { display: flex; border: 1px solid var(--border2); border-radius: 5px; overflow: hidden; }
+.seg-btn { background: var(--s3); border: none; color: var(--muted); padding: .35rem .75rem; font-family: 'Barlow', sans-serif; font-size: .825rem; cursor: pointer; white-space: nowrap; }
+.seg-btn:hover { background: var(--s4); color: var(--text); }
+.seg-btn.seg-active { background: var(--accent); color: #fff; }
 select, .search-input {
   background: var(--s3); border: 1px solid var(--border2); color: var(--text);
   padding: .35rem .75rem; border-radius: 5px; font-family: 'Barlow', sans-serif; font-size: .825rem;
@@ -258,3 +262,84 @@ select option { background: var(--s3); }
 .codex-purple { color: #c070e0; font-weight: 500; }
 .codex-energy { color: #e8c040; font-weight: 600; }
 .codex-star   { color: var(--gold2); letter-spacing: .05em; }
+
+/* ── Build Cores ── */
+.empty-state { text-align: center; padding: 2rem; color: var(--muted); font-style: italic; }
+
+.core-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.core-card {
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  padding: 1rem;
+}
+
+.core-header {
+  display: flex;
+  align-items: baseline;
+  gap: .75rem;
+  margin-bottom: .75rem;
+  flex-wrap: wrap;
+}
+
+.core-char {
+  font-family: 'Cinzel', serif;
+  font-size: .8rem;
+  color: var(--gold2);
+  letter-spacing: .05em;
+}
+
+.core-lift {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+.core-stats {
+  font-size: .72rem;
+  color: var(--muted);
+}
+
+.core-section {
+  margin-bottom: .6rem;
+}
+
+.core-label {
+  display: block;
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: .35rem;
+}
+
+.core-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.tag {
+  padding: .2rem .55rem;
+  border-radius: 4px;
+  font-size: .75rem;
+  white-space: nowrap;
+}
+
+.tag-relic {
+  background: rgba(201,144,60,.12);
+  border: 1px solid rgba(201,144,60,.25);
+  color: var(--gold2);
+}
+
+.tag-card {
+  background: rgba(91,141,217,.1);
+  border: 1px solid rgba(91,141,217,.2);
+  color: var(--neutral);
+}
