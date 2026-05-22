@@ -337,6 +337,131 @@ export function getCardInflectionStats(db: Database.Database, character?: string
   `).all(...params) as CardInflectionStat[];
 }
 
+export type CardDimension = 'rarity' | 'type' | 'color' | 'cost';
+
+export interface DimensionStat {
+  group: string;
+  total_cards: number;
+  total_offered: number;
+  total_picked: number;
+  pick_rate: number;
+  win_rate: number | null;
+  avg_elo: number | null;
+}
+
+export function getCardStatsByDimension(
+  db: Database.Database,
+  dimension: CardDimension,
+  character?: string,
+): DimensionStat[] {
+  const field = `json_extract(c.data_json, '$.${dimension}')`;
+  const charWhere = character ? 'AND r.character = ?' : '';
+  const charAnd2 = character ? 'AND ce.character = ?' : '';
+  const params: unknown[] = character ? [character, character] : [];
+
+  return db.prepare(`
+    SELECT
+      CAST(${field} AS TEXT) AS "group",
+      COUNT(DISTINCT cc.card_id) AS total_cards,
+      COUNT(DISTINCT CASE WHEN cc.was_picked = 0 THEN cc.run_id || ':' || cc.card_id END) +
+        COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id || ':' || cc.card_id END) AS total_offered,
+      COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id || ':' || cc.card_id END) AS total_picked,
+      CAST(COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id || ':' || cc.card_id END) AS REAL) /
+        NULLIF(COUNT(DISTINCT cc.run_id || ':' || cc.card_id), 0) AS pick_rate,
+      CAST(SUM(CASE WHEN cc.was_picked = 1 THEN r.victory ELSE 0 END) AS REAL) /
+        NULLIF(COUNT(DISTINCT CASE WHEN cc.was_picked = 1 THEN cc.run_id END), 0) AS win_rate,
+      AVG(ce.elo) AS avg_elo
+    FROM card_choices cc
+    JOIN runs r ON r.id = cc.run_id
+    JOIN spire_codex_cache c ON c.entity_type = 'card'
+      AND c.entity_id = LOWER(REPLACE(cc.card_id, ' ', '_'))
+    LEFT JOIN card_elo ce ON ce.card_id = cc.card_id ${charAnd2}
+    WHERE ${field} IS NOT NULL ${charWhere}
+    GROUP BY CAST(${field} AS TEXT)
+    ORDER BY pick_rate DESC
+  `).all(...params) as DimensionStat[];
+}
+
+export interface UpgradeImpact {
+  card_id: string;
+  runs_with_upgraded: number;
+  runs_with_base: number;
+  win_rate_upgraded: number | null;
+  win_rate_base: number | null;
+  avg_floor_upgraded: number | null;
+  avg_floor_base: number | null;
+}
+
+function cleanCardId(raw: string): string {
+  let s = raw ?? '';
+  if (s.startsWith('CARD.')) s = s.slice(5);
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function getUpgradeImpact(db: Database.Database, character?: string): UpgradeImpact[] {
+  const charWhere = character ? 'WHERE character = ?' : '';
+  const params: unknown[] = character ? [character] : [];
+
+  const runs = db.prepare(
+    `SELECT id, raw_json, victory, floor_reached FROM runs ${charWhere}`
+  ).all(...params) as { id: number; raw_json: string; victory: number; floor_reached: number }[];
+
+  const buckets = new Map<string, {
+    upgraded_wins: number; upgraded_total: number; upgraded_floors: number;
+    base_wins: number; base_total: number; base_floors: number;
+  }>();
+
+  for (const run of runs) {
+    let raw: Record<string, unknown>;
+    try { raw = JSON.parse(run.raw_json) as Record<string, unknown>; } catch { continue; }
+    const player = ((raw.players as Record<string, unknown>[] | undefined) ?? [])[0] ?? {};
+    const deck = (player.deck as Record<string, unknown>[] | undefined) ?? [];
+
+    const seen = new Set<string>();
+    for (const card of deck) {
+      const id = cleanCardId((card.id as string | null) ?? '');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+
+      const upgraded = ((card.current_upgrade_level as number | null) ?? 0) > 0;
+      if (!buckets.has(id)) {
+        buckets.set(id, { upgraded_wins: 0, upgraded_total: 0, upgraded_floors: 0, base_wins: 0, base_total: 0, base_floors: 0 });
+      }
+      const b = buckets.get(id)!;
+      if (upgraded) {
+        b.upgraded_total++;
+        b.upgraded_wins += run.victory;
+        b.upgraded_floors += run.floor_reached ?? 0;
+      } else {
+        b.base_total++;
+        b.base_wins += run.victory;
+        b.base_floors += run.floor_reached ?? 0;
+      }
+    }
+  }
+
+  const MIN = 3;
+  const results: UpgradeImpact[] = [];
+  for (const [card_id, b] of buckets.entries()) {
+    if (b.upgraded_total < MIN && b.base_total < MIN) continue;
+    results.push({
+      card_id,
+      runs_with_upgraded: b.upgraded_total,
+      runs_with_base: b.base_total,
+      win_rate_upgraded: b.upgraded_total >= MIN ? b.upgraded_wins / b.upgraded_total : null,
+      win_rate_base: b.base_total >= MIN ? b.base_wins / b.base_total : null,
+      avg_floor_upgraded: b.upgraded_total >= MIN ? b.upgraded_floors / b.upgraded_total : null,
+      avg_floor_base: b.base_total >= MIN ? b.base_floors / b.base_total : null,
+    });
+  }
+
+  return results.sort((a, b) => {
+    const da = (a.win_rate_upgraded ?? 0) - (a.win_rate_base ?? 0);
+    const db2 = (b.win_rate_upgraded ?? 0) - (b.win_rate_base ?? 0);
+    return Math.abs(db2) - Math.abs(da);
+  });
+}
+
 export interface SkipRateStat {
   act: string;
   total_choices: number;

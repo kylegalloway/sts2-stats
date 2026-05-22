@@ -18,6 +18,32 @@ router.get('/cached/cards', (c) => {
   return c.json(result);
 });
 
+router.post('/seed-cards', async (c) => {
+  const res = await fetch('https://spire-codex.com/api/cards?limit=600', {
+    headers: { Accept: 'application/json', 'User-Agent': 'sts2-stats/1.0' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return c.json({ error: `spire-codex returned ${res.status}` }, 502);
+
+  const cards = (await res.json()) as { id: string; [key: string]: unknown }[];
+
+  const upsert = db.prepare(`
+    INSERT INTO spire_codex_cache (entity_type, entity_id, data_json, fetched_at)
+    VALUES ('card', ?, ?, datetime('now'))
+    ON CONFLICT (entity_type, entity_id) DO UPDATE SET
+      data_json = excluded.data_json,
+      fetched_at = excluded.fetched_at
+  `);
+
+  db.transaction(() => {
+    for (const card of cards) {
+      upsert.run(card.id.toLowerCase().replace(/_/g, '_'), JSON.stringify(card));
+    }
+  })();
+
+  return c.json({ inserted: cards.length });
+});
+
 router.get('/:type/:name', async (c) => {
   const type = c.req.param('type') as EntityType;
   if (!VALID_TYPES.includes(type)) {

@@ -8,6 +8,31 @@ import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
 import { formatName } from '../utils/format.js';
 
+interface DimensionStat {
+  group: string;
+  total_cards: number;
+  total_offered: number;
+  total_picked: number;
+  pick_rate: number;
+  win_rate: number | null;
+  avg_elo: number | null;
+}
+interface DimensionBreakdown {
+  rarity: DimensionStat[];
+  type: DimensionStat[];
+  color: DimensionStat[];
+  cost: DimensionStat[];
+}
+interface UpgradeImpact {
+  card_id: string;
+  runs_with_upgraded: number;
+  runs_with_base: number;
+  win_rate_upgraded: number | null;
+  win_rate_base: number | null;
+  avg_floor_upgraded: number | null;
+  avg_floor_base: number | null;
+}
+
 interface CardStat {
   card_id: string;
   offered: number;
@@ -67,11 +92,34 @@ export default function Cards() {
     queryFn: () => api.getCardSkipRates(selectedCharacter || undefined) as Promise<SkipRateStat[]>,
   });
 
-  const { data: cachedCards } = useQuery<{ id: string; rarity: string | null; color: string | null }[]>({
+  const { data: cachedCards, refetch: refetchCachedCards } = useQuery<{ id: string; rarity: string | null; color: string | null }[]>({
     queryKey: ['codex-cached-cards'],
     queryFn: () => api.getCodexCachedCards(),
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: dimensionData, refetch: refetchDimension } = useQuery<DimensionBreakdown>({
+    queryKey: ['cards-by-dimension', selectedCharacter],
+    queryFn: () => api.getCardsByDimension(selectedCharacter || undefined) as Promise<DimensionBreakdown>,
+  });
+
+  const { data: upgradeData } = useQuery<{ upgrade_impact: UpgradeImpact[] }>({
+    queryKey: ['cards-upgrade-impact', selectedCharacter],
+    queryFn: () => api.getUpgradeImpact(selectedCharacter || undefined) as Promise<{ upgrade_impact: UpgradeImpact[] }>,
+  });
+
+  const [seedStatus, setSeedStatus] = useState<string | null>(null);
+  const handleSeedCodex = async () => {
+    setSeedStatus('Seeding…');
+    try {
+      const result = await api.seedCodexCards() as { inserted?: number; error?: string };
+      if (result.error) { setSeedStatus(`Error: ${result.error}`); return; }
+      setSeedStatus(`Seeded ${result.inserted ?? 0} cards`);
+      await Promise.all([refetchCachedCards(), refetchDimension()]);
+    } catch {
+      setSeedStatus('Seed failed');
+    }
+  };
 
   const rarityMap = new Map<string, string>(
     (cachedCards ?? []).flatMap((c) => {
@@ -154,6 +202,35 @@ export default function Cards() {
     },
   ];
 
+  const upgradeCols: Column<UpgradeImpact>[] = [
+    {
+      key: 'card_id', label: 'Card',
+      render: (v) => (
+        <EntityTooltip name={formatName(v as string)} entityType="card">
+          <span>{formatName(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
+    { key: 'runs_with_upgraded', label: 'Upgraded Runs', render: (v) => <span className="num">{num(v as number)}</span> },
+    { key: 'runs_with_base', label: 'Base Runs', render: (v) => <span className="num">{num(v as number)}</span> },
+    { key: 'win_rate_upgraded', label: 'Win% Upgraded', render: (v) => <span className="pct">{pct(v as number | null)}</span> },
+    { key: 'win_rate_base', label: 'Win% Base', render: (v) => <span className="pct">{pct(v as number | null)}</span> },
+    { key: 'avg_floor_upgraded', label: 'Avg Floor Upgraded', render: (v) => <span className="num">{fl(v as number | null)}</span> },
+    { key: 'avg_floor_base', label: 'Avg Floor Base', render: (v) => <span className="num">{fl(v as number | null)}</span> },
+    {
+      key: 'win_rate_upgraded',
+      label: 'Win% Δ',
+      render: (_v, row) => {
+        const r = row as UpgradeImpact;
+        const d = r.win_rate_upgraded != null && r.win_rate_base != null
+          ? r.win_rate_upgraded - r.win_rate_base
+          : null;
+        const color = d == null ? undefined : d > 0 ? '#40a070' : d < 0 ? '#c94040' : undefined;
+        return <span className="pct" style={{ color }}>{delta(d != null ? d * 100 : null)}{d != null ? '%' : ''}</span>;
+      },
+    },
+  ];
+
   return (
     <div className="content">
       <div className="controls">
@@ -171,6 +248,14 @@ export default function Cards() {
             ))}
           </select>
         </label>
+        <button
+          onClick={handleSeedCodex}
+          style={{ marginLeft: 'auto', fontSize: '.8rem', padding: '4px 10px', cursor: 'pointer' }}
+          title="Fetch all card metadata from spire-codex.com"
+        >
+          Seed Codex Data
+        </button>
+        {seedStatus && <span className="dim" style={{ fontSize: '.8rem' }}>{seedStatus}</span>}
       </div>
 
       {skipRates && skipRates.length > 0 && (
@@ -325,6 +410,119 @@ export default function Cards() {
           filterKeys={['card_id']}
         />
       </div>
+
+      {dimensionData && (
+        <>
+          <div className="tcard" style={{ marginBottom: '1rem' }}>
+            <div className="tcard-head">
+              <span className="tcard-title">Pick Rate &amp; Win Rate by Card Dimension</span>
+              <span className="dim" style={{ fontSize: '.75rem' }}>Only cards with spire-codex metadata. Color = card&apos;s home class.</span>
+            </div>
+          </div>
+          <div className="charts-row col2">
+            {dimensionData.rarity.length > 0 && (
+              <div className="chart-card">
+                <h3>By Rarity</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
+                  <thead>
+                    <tr>{['Rarity', 'Cards', 'Pick%', 'Win%'].map((h) => (
+                      <th key={h} style={{ textAlign: 'right', padding: '4px 8px', borderBottom: '1px solid #333', color: '#aaa' }}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {dimensionData.rarity.map((r) => (
+                      <tr key={r.group}>
+                        <td style={{ padding: '4px 8px' }}>{r.group}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="num">{r.total_cards}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="pct">{pct(r.pick_rate)}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="pct">{pct(r.win_rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {dimensionData.type.length > 0 && (
+              <div className="chart-card">
+                <h3>By Type</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
+                  <thead>
+                    <tr>{['Type', 'Cards', 'Pick%', 'Win%'].map((h) => (
+                      <th key={h} style={{ textAlign: 'right', padding: '4px 8px', borderBottom: '1px solid #333', color: '#aaa' }}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {dimensionData.type.map((r) => (
+                      <tr key={r.group}>
+                        <td style={{ padding: '4px 8px' }}>{r.group}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="num">{r.total_cards}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="pct">{pct(r.pick_rate)}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="pct">{pct(r.win_rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="charts-row col2">
+            {dimensionData.cost.length > 0 && (
+              <div className="chart-card">
+                <h3>By Cost</h3>
+                <HBarChart
+                  data={[...dimensionData.cost]
+                    .sort((a, b) => Number(a.group) - Number(b.group))
+                    .map((r) => ({ label: `${r.group} energy`, value: +(r.pick_rate * 100).toFixed(1) }))}
+                  color="#5b8dd9"
+                  height={Math.max(100, dimensionData.cost.length * 36)}
+                  valueFormatter={(v) => `${v}%`}
+                />
+              </div>
+            )}
+            {dimensionData.color.length > 0 && (
+              <div className="chart-card">
+                <h3>By Class</h3>
+                <p className="dim" style={{ fontSize: '.75rem', margin: '0 0 .75rem' }}>
+                  Card&apos;s home class — cross-class picks included
+                </p>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
+                  <thead>
+                    <tr>{['Class', 'Cards', 'Pick%', 'Win%'].map((h) => (
+                      <th key={h} style={{ textAlign: 'right', padding: '4px 8px', borderBottom: '1px solid #333', color: '#aaa' }}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {dimensionData.color.map((r) => (
+                      <tr key={r.group}>
+                        <td style={{ padding: '4px 8px', textTransform: 'capitalize' }}>{r.group}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="num">{r.total_cards}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="pct">{pct(r.pick_rate)}</td>
+                        <td style={{ textAlign: 'right', padding: '4px 8px' }} className="pct">{pct(r.win_rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {upgradeData && upgradeData.upgrade_impact.length > 0 && (
+        <div className="tcard" style={{ marginBottom: '1rem' }}>
+          <div className="tcard-head">
+            <span className="tcard-title">Upgrade Impact</span>
+            <span className="dim" style={{ fontSize: '.75rem' }}>
+              Win rate &amp; avg floor reached with vs. without upgrade (min 3 runs each). Sorted by largest win rate delta.
+            </span>
+          </div>
+          <SortableTable
+            columns={upgradeCols}
+            rows={upgradeData.upgrade_impact}
+            defaultSortKey="win_rate_upgraded"
+          />
+        </div>
+      )}
     </div>
   );
 }
