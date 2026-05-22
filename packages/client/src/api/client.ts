@@ -25,6 +25,7 @@ export const api = {
   getAscensionStats: (character?: string) => get('/overview/ascension', character ? { character } : {}),
   getPathComposition: (character?: string) => get('/overview/path-composition', character ? { character } : {}),
   getBossStats: (character?: string) => get('/kills/bosses', character ? { character } : {}),
+  getEnemyInflection: (character?: string) => get('/kills/inflection', character ? { character } : {}),
   getCardSkipRates: (character?: string) => get('/cards/skip-rates', character ? { character } : {}),
   getPotions: (character?: string) => get('/potions', character ? { character } : {}),
   getStatus: () => get('/status'),

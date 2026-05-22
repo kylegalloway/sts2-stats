@@ -4,6 +4,7 @@ import CharacterSelect from '../components/shared/CharacterSelect.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
+import { formatName } from '../utils/format.js';
 
 interface PotionStat {
   potion_id: string;
@@ -66,7 +67,7 @@ export default function Potions() {
   const topUsed = [...stats].sort((a, b) => b.times_used - a.times_used).slice(0, 15);
 
   const statCols: Column<PotionStat>[] = [
-    { key: 'potion_id', label: 'Potion' },
+    { key: 'potion_id', label: 'Potion', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'times_offered', label: 'Offered', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'times_obtained', label: 'Taken', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'pick_rate', label: 'Pick Rate', render: (v) => <span className="pct">{pct(v as number | null)}</span> },
@@ -77,7 +78,7 @@ export default function Potions() {
   ];
 
   const bossUsageCols: Column<PotionBossUsageStat>[] = [
-    { key: 'potion_id', label: 'Potion' },
+    { key: 'potion_id', label: 'Potion', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'total_used', label: 'Total Used', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'used_at_boss', label: 'At Boss', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'used_elsewhere', label: 'Elsewhere', render: (v) => <span className="num">{num(v as number)}</span> },
@@ -106,7 +107,7 @@ export default function Potions() {
         <div className="chart-card">
           <h3>Pick Rate (Top 20 by Offered)</h3>
           <HBarChart
-            data={topByOffered.map((p) => ({ label: p.potion_id, value: +((p.pick_rate ?? 0) * 100).toFixed(1) }))}
+            data={topByOffered.map((p) => ({ label: formatName(p.potion_id), value: +((p.pick_rate ?? 0) * 100).toFixed(1) }))}
             color="#9b7ec8"
             height={Math.max(180, topByOffered.length * 32)}
             valueFormatter={(v) => `${v}%`}
@@ -118,7 +119,7 @@ export default function Potions() {
             % of obtained potions that were actually used (not discarded or held)
           </p>
           <HBarChart
-            data={topUsed.map((p) => ({ label: p.potion_id, value: +((p.use_rate ?? 0) * 100).toFixed(1) }))}
+            data={topUsed.map((p) => ({ label: formatName(p.potion_id), value: +((p.use_rate ?? 0) * 100).toFixed(1) }))}
             color="#5b8dd9"
             height={Math.max(180, topUsed.length * 32)}
             valueFormatter={(v) => `${v}%`}
@@ -131,8 +132,8 @@ export default function Potions() {
           <div className="chart-card">
             <h3>Usage by Room Type</h3>
             <HBarChart
-              data={usageByRoom.map((u) => ({ label: u.room_type, value: u.times_used }))}
-              colorFn={(label) => ROOM_COLORS[label] ?? '#888'}
+              data={usageByRoom.map((u) => ({ label: formatName(u.room_type), value: u.times_used }))}
+              colorFn={(label) => ROOM_COLORS[label.toLowerCase().replace(/ /g, '_')] ?? '#888'}
               height={Math.max(120, usageByRoom.length * 40)}
             />
           </div>

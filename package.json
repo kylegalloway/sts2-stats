@@ -2,15 +2,23 @@
   "name": "sts2-stats",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w packages/server\" \"npm run dev -w packages/client\"",
     "bootstrap": "tsx scripts/bootstrap.ts",
-    "build": "npm run build -w packages/server && npm run build -w packages/client"
+    "build": "npm run build -w packages/server && npm run build -w packages/client",
+    "lint": "eslint packages",
+    "test": "vitest run"
   },
   "devDependencies": {
     "concurrently": "^9",
+    "eslint": "^10.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
   }
 }

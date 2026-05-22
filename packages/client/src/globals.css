@@ -113,6 +113,7 @@ body {
   font-family: 'Cinzel', serif; font-size: .7rem; letter-spacing: .12em;
   color: var(--muted); text-transform: uppercase; flex: 1;
 }
+.tcard-desc { padding: .5rem 1.25rem; font-size: .8rem; color: var(--muted); margin: 0; }
 .tcard-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
 
 table { width: 100%; border-collapse: collapse; }
@@ -131,7 +132,8 @@ td {
   border-bottom: 1px solid var(--border); vertical-align: middle;
 }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(201,144,60,.04); }
+tbody tr:nth-child(even) td { background: rgba(255,255,255,.025); }
+tr:hover td { background: rgba(201,144,60,.07) !important; }
 
 .num { font-family: 'JetBrains Mono', monospace; font-size: .8rem; }
 .pct { font-family: 'JetBrains Mono', monospace; font-size: .8rem; }

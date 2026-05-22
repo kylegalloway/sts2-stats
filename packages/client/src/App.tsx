@@ -10,7 +10,7 @@ import RunLog from './tabs/RunLog.js';
 import Potions from './tabs/Potions.js';
 import { useStore } from './store.js';
 
-const TABS = ['Overview', 'Cards', 'Relics', 'Potions', 'Synergies', 'Deaths', 'HP & Gold', 'Run Log'] as const;
+const TABS = ['Overview', 'Cards', 'Relics', 'Potions', 'Synergies', 'Enemies', 'HP & Gold', 'Run Log'] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_COMPONENTS: Record<TabName, React.ComponentType> = {
@@ -18,7 +18,7 @@ const TAB_COMPONENTS: Record<TabName, React.ComponentType> = {
   Cards,
   Relics,
   Synergies,
-  Deaths,
+  Enemies: Deaths,
   'HP & Gold': HpGold,
   'Run Log': RunLog,
   Potions,

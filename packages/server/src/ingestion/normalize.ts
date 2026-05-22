@@ -115,7 +115,9 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     const firstRoom = roomsRaw[0] ?? {};
     const roomType = (firstRoom.room_type as string | null) ?? null;
     const encounterRaw = (firstRoom.model_id as string | null) ?? null;
-    const encounterId = encounterRaw ? cleanId(encounterRaw, 'ENCOUNTER.') : null;
+    const encounterId = encounterRaw
+      ? cleanId(encounterRaw.replace(/^EVENT\./, 'ENCOUNTER.'), 'ENCOUNTER.')
+      : null;
     const damageTaken = (g(ps, 'damage_taken') as number | null) ?? 0;
     damagePerFloor.push({ floor, room_type: roomType, encounter_id: encounterId, damage_taken: damageTaken });
 

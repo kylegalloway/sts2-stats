@@ -5,6 +5,7 @@ import CharacterSelect from '../components/shared/CharacterSelect.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
+import { formatName } from '../utils/format.js';
 
 interface RelicStat {
   relic_key: string;
@@ -48,7 +49,7 @@ export default function Relics() {
     .slice(0, 20);
 
   const cols: Column<RelicStat>[] = [
-    { key: 'relic_key', label: 'Relic' },
+    { key: 'relic_key', label: 'Relic', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'obtain_count', label: 'Count', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'obtain_rate', label: 'Obtain Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
     { key: 'win_rate', label: 'Win Rate', render: (v) => <span className="pct">{pct(v as number | null)}</span> },
@@ -79,7 +80,7 @@ export default function Relics() {
         <div className="chart-card">
           <h3>Top 20 by Quality Score</h3>
           <HBarChart
-            data={topQuality.map((r) => ({ label: r.relic_key, value: +(r.quality_score ?? 0).toFixed(3) }))}
+            data={topQuality.map((r) => ({ label: formatName(r.relic_key), value: +(r.quality_score ?? 0).toFixed(3) }))}
             color="#c9903c"
             height={Math.max(180, topQuality.length * 32)}
           />
@@ -87,7 +88,7 @@ export default function Relics() {
         <div className="chart-card">
           <h3>Top 20 by Win Rate (≥2 runs)</h3>
           <HBarChart
-            data={topWR.map((r) => ({ label: r.relic_key, value: Math.round((r.win_rate ?? 0) * 100) }))}
+            data={topWR.map((r) => ({ label: formatName(r.relic_key), value: Math.round((r.win_rate ?? 0) * 100) }))}
             color="#52b875"
             valueFormatter={(v) => `${v}%`}
             height={Math.max(180, topWR.length * 32)}

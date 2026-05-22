@@ -5,6 +5,7 @@ import CharacterSelect from '../components/shared/CharacterSelect.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
+import { formatName } from '../utils/format.js';
 
 interface CardStat {
   card_id: string;
@@ -82,7 +83,7 @@ export default function Cards() {
     .slice(0, 15);
 
   const mainCols: Column<CardStat>[] = [
-    { key: 'card_id', label: 'Card' },
+    { key: 'card_id', label: 'Card', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'offered', label: 'Seen', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'picked', label: 'Picked', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'pick_rate', label: 'Pick Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
@@ -91,7 +92,7 @@ export default function Cards() {
   ];
 
   const progCols: Column<CardProgressionStat>[] = [
-    { key: 'card_id', label: 'Card' },
+    { key: 'card_id', label: 'Card', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'times_offered', label: 'Offered', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'pick_rate', label: 'Pick Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
     { key: 'avg_floor_when_picked', label: 'Avg Floor (Took)', render: (v) => <span className="num">{fl(v as number | null)}</span> },
@@ -170,7 +171,7 @@ export default function Cards() {
         <div className="chart-card">
           <h3>Top 20 by ELO</h3>
           <HBarChart
-            data={topElo.map((c) => ({ label: c.card_id, value: Math.round(c.elo) }))}
+            data={topElo.map((c) => ({ label: formatName(c.card_id), value: Math.round(c.elo) }))}
             color="#c9903c"
             height={Math.max(180, topElo.length * 32)}
           />
@@ -178,7 +179,7 @@ export default function Cards() {
         <div className="chart-card">
           <h3>Top 20 by Quality Score</h3>
           <HBarChart
-            data={topQuality.map((c) => ({ label: c.card_id, value: +(c.quality_score ?? 0).toFixed(3) }))}
+            data={topQuality.map((c) => ({ label: formatName(c.card_id), value: +(c.quality_score ?? 0).toFixed(3) }))}
             color="#5b8dd9"
             height={Math.max(180, topQuality.length * 32)}
           />
@@ -204,7 +205,7 @@ export default function Cards() {
                 </p>
                 <HBarChart
                   data={topOverrated.map((c) => ({
-                    label: c.card_id,
+                    label: formatName(c.card_id),
                     value: +Math.abs(c.floor_delta ?? 0).toFixed(1),
                   }))}
                   color="#c94040"
@@ -221,7 +222,7 @@ export default function Cards() {
                 </p>
                 <HBarChart
                   data={topUnderrated.map((c) => ({
-                    label: c.card_id,
+                    label: formatName(c.card_id),
                     value: +(c.floor_delta ?? 0).toFixed(1),
                   }))}
                   color="#40a070"

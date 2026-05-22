@@ -148,3 +148,7 @@ vite.config.ts.timestamp-*
 # SQLite WAL/SHM sidecar files
 *.db-shm
 *.db-wal
+
+# Claude Code project instructions (personal, not shared)
+CLAUDE.md
+CLAUDE.local.md

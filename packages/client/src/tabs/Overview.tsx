@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 import { api } from '../api/client.js';
 import KpiCard from '../components/shared/KpiCard.js';
 import CharacterSelect, { charColor } from '../components/shared/CharacterSelect.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import LineChart, { type ReferenceLineSpec } from '../components/charts/LineChart.js';
+import { formatName } from '../utils/format.js';
+import { useStore } from '../store.js';
 
 interface OverviewData {
   kpis: { total_runs: number; total_wins: number; win_rate: number; avg_floor: number; avg_run_time: number };
@@ -25,7 +26,8 @@ const fmtTime = (s: number | null) => {
 const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 
 export default function Overview() {
-  const [char, setChar] = useState('');
+  const char = useStore((s) => s.selectedCharacter);
+  const setChar = useStore((s) => s.setSelectedCharacter);
 
   const { data, isLoading } = useQuery<OverviewData>({
     queryKey: ['overview', char],
@@ -57,7 +59,7 @@ export default function Overview() {
   const chars = [...new Set(timeline.map((r) => r.character))].sort();
 
   const charBarData = winByChar.map((c) => ({
-    label: c.character.replace(/_/g, ' '),
+    label: formatName(c.character),
     value: Math.round((c.win_rate ?? 0) * 100),
     color: charColor(c.character),
   }));
@@ -100,13 +102,13 @@ export default function Overview() {
 
   const pathCols: Column<(typeof pathRows)[0]>[] = [
     { key: 'act', label: 'Act' },
-    { key: 'node_type', label: 'Node Type', render: (v) => <span>{String(v).replace(/_/g, ' ')}</span> },
+    { key: 'node_type', label: 'Node Type', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'wins_avg', label: 'Avg/Run (Wins)', render: (v) => <span className="num win">{v != null ? (v as number).toFixed(2) : '—'}</span> },
     { key: 'losses_avg', label: 'Avg/Run (Losses)', render: (v) => <span className="num loss">{v != null ? (v as number).toFixed(2) : '—'}</span> },
   ];
 
   const recentCols: Column<(typeof timeline)[0]>[] = [
-    { key: 'character', label: 'Character', render: (v) => <span>{String(v).replace(/_/g, ' ')}</span> },
+    { key: 'character', label: 'Character', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'victory', label: 'Result', render: (v) => v ? <span className="badge-win">Win</span> : <span className="badge-loss">Loss</span> },
     { key: 'ascension', label: 'Asc', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'floor_reached', label: 'Floor', render: (v) => <span className="num">{String(v)}</span> },

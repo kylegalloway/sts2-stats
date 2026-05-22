@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import { useStore } from '../store.js';
+import { formatEnemy, formatName } from '../utils/format.js';
 
 interface Run {
   id: number;
@@ -55,7 +56,7 @@ export default function RunLog() {
   const cols: Column<Run>[] = [
     {
       key: 'character', label: 'Character',
-      render: (v) => <span>{String(v).replace(/_/g, ' ')}</span>,
+      render: (v) => <span>{formatName(v as string)}</span>,
     },
     {
       key: 'victory', label: 'Result',
@@ -65,7 +66,7 @@ export default function RunLog() {
     { key: 'floor_reached', label: 'Floor', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'final_gold', label: 'Gold', render: (v) => <span className="num">{v == null ? '—' : String(v)}</span> },
     { key: 'run_time', label: 'Time', render: (v) => <span className="num">{fmtTime(v as number | null)}</span> },
-    { key: 'killed_by', label: 'Killed By', render: (v) => <span className="dim">{String(v ?? '—')}</span> },
+    { key: 'killed_by', label: 'Killed By', render: (v) => <span className="dim">{formatEnemy(v as string | null)}</span> },
     {
       key: 'acts', label: 'Route',
       render: (v) => {

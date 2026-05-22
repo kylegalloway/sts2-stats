@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import { useStore } from '../store.js';
+import { formatName } from '../utils/format.js';
 
 interface Synergy {
   character: string;
@@ -43,9 +44,9 @@ export default function Synergies() {
   });
 
   const cols: Column<Synergy>[] = [
-    { key: 'character', label: 'Character', render: (v) => <span>{String(v).replace(/_/g, ' ')}</span> },
-    { key: 'card_id', label: 'Card' },
-    { key: 'relic_key', label: 'Relic' },
+    { key: 'character', label: 'Character', render: (v) => <span>{formatName(v as string)}</span> },
+    { key: 'card_id', label: 'Card', render: (v) => <span>{formatName(v as string)}</span> },
+    { key: 'relic_key', label: 'Relic', render: (v) => <span>{formatName(v as string)}</span> },
     { key: 'occurrences', label: 'Co-occurs', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'win_rate', label: 'Win Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
     { key: 'baseline_wr', label: 'Baseline', render: (v) => <span className="pct dim">{pct(v as number)}</span> },
