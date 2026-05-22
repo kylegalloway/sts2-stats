@@ -16,8 +16,9 @@ export function getSynergies(
   minOccurrences = 5
 ): Synergy[] {
   const charFilter = character ? 'AND r.character = ?' : '';
-  const params: unknown[] = [minOccurrences];
+  const params: unknown[] = [];
   if (character) params.push(character);
+  params.push(minOccurrences);
 
   const baselineRows = db.prepare(
     `SELECT character, AVG(victory) as wr FROM runs ${character ? 'WHERE character = ?' : ''} GROUP BY character`

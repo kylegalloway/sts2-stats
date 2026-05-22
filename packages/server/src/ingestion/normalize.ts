@@ -141,14 +141,6 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
       cardChoices.push({ floor, picked, not_picked: notPicked, act });
     }
 
-    const relicsRaw = (ps.relics as Record<string, unknown>[] | undefined) ?? [];
-    for (const relic of relicsRaw) {
-      const key = cleanId((g(relic, 'id') as string | null) ?? '', 'RELIC.');
-      if (key && !relicsMap.has(key)) {
-        relicsMap.set(key, { key, floor, act });
-      }
-    }
-
     for (const pc of (ps.potion_choices as Record<string, unknown>[] | undefined) ?? []) {
       const potionId = cleanId((pc.choice as string | null) ?? '', 'POTION.');
       if (potionId) potionEvents.push({ floor, room_type: roomType, act, potion_id: potionId, event_type: pc.was_picked ? 'obtained' : 'declined' });
@@ -161,6 +153,14 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
       const potionId = cleanId(p, 'POTION.');
       if (potionId) potionEvents.push({ floor, room_type: roomType, act, potion_id: potionId, event_type: 'discarded' });
     }
+  }
+
+  const playerRelics = (player.relics as Record<string, unknown>[] | undefined) ?? [];
+  for (const relic of playerRelics) {
+    const key = cleanId((relic.id as string | null) ?? '', 'RELIC.');
+    const floor = (relic.floor_added_to_deck as number | null) ?? null;
+    const act = floor != null ? floorToAct(floor) : 'Unknown';
+    if (key) relicsMap.set(key, { key, floor, act });
   }
 
   const actsRaw = (raw.acts as string[] | undefined) ?? [];

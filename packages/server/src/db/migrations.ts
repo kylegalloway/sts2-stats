@@ -128,6 +128,41 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     const characters = (db.prepare('SELECT DISTINCT character FROM runs').all() as { character: string }[]).map((r) => r.character);
     for (const character of characters) rebuildElo(db, character);
   },
+  6: (db) => {
+    // Backfill relics_obtained from players[0].relics — the original normalize code
+    // incorrectly looked for relics in player_stats[i].relics which doesn't exist.
+    const runs = db.prepare('SELECT id, raw_json FROM runs').all() as { id: number; raw_json: string }[];
+    const insert = db.prepare(
+      'INSERT OR IGNORE INTO relics_obtained (run_id, relic_key, floor, act) VALUES (?, ?, ?, ?)'
+    );
+    const ACT_BOUNDS_M: [string, number, number][] = [
+      ['Act 1', 1, 16], ['Act 2', 17, 33], ['Act 3+', 34, 999],
+    ];
+    function mFloorToAct2(floor: number | null): string {
+      if (floor == null) return 'Unknown';
+      for (const [name, lo, hi] of ACT_BOUNDS_M) {
+        if (floor >= lo && floor <= hi) return name;
+      }
+      return 'Act 3+';
+    }
+    db.transaction(() => {
+      for (const run of runs) {
+        try {
+          const raw = JSON.parse(run.raw_json) as Record<string, unknown>;
+          const player = ((raw.players as Record<string, unknown>[] | undefined) ?? [{}])[0] ?? {};
+          const relics = (player.relics as Record<string, unknown>[] | undefined) ?? [];
+          for (const relic of relics) {
+            const idRaw = (relic.id as string | null) ?? '';
+            let key = idRaw.startsWith('RELIC.') ? idRaw.slice('RELIC.'.length) : idRaw;
+            key = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            const floor = (relic.floor_added_to_deck as number | null) ?? null;
+            const act = mFloorToAct2(floor);
+            if (key) insert.run(run.id, key, floor, act);
+          }
+        } catch { /* skip malformed */ }
+      }
+    })();
+  },
 };
 
 export function runMigrations(db: Database.Database) {

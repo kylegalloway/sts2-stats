@@ -2,11 +2,11 @@ import type Database from 'better-sqlite3';
 import { wilsonLower } from './stats-utils.js';
 
 export const STARTING_RELICS = new Set([
-  'Burning Blood',    // Ironclad
-  'Ring Of The Snake', // Silent
-  'Divine Right',     // Regent
-  'Bound Phylactery', // Necrobinder
-  'Cracked Core',     // Defect
+  'BURNING BLOOD',     // Ironclad
+  'RING OF THE SNAKE', // Silent
+  'DIVINE RIGHT',      // Regent
+  'BOUND PHYLACTERY',  // Necrobinder
+  'CRACKED CORE',      // Defect
 ]);
 
 const STARTING_RELIC_PARAMS = [...STARTING_RELICS];
@@ -22,7 +22,7 @@ export interface RelicStat {
 }
 
 export function getRelicStats(db: Database.Database, character?: string): RelicStat[] {
-  const charWhere = character ? 'WHERE r.character = ?' : '';
+  const charWhere = character ? 'WHERE character = ?' : '';
   const charAnd = character ? 'AND r.character = ?' : '';
   const params = character ? [character] : [];
 
