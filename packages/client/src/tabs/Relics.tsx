@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
@@ -49,7 +50,14 @@ export default function Relics() {
     .slice(0, 20);
 
   const cols: Column<RelicStat>[] = [
-    { key: 'relic_key', label: 'Relic', render: (v) => <span>{formatName(v as string)}</span> },
+    {
+      key: 'relic_key', label: 'Relic',
+      render: (v) => (
+        <EntityTooltip name={formatName(v as string)} entityType="relic">
+          <span>{formatName(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
     { key: 'obtain_count', label: 'Count', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'obtain_rate', label: 'Obtain Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
     { key: 'win_rate', label: 'Win Rate', render: (v) => <span className="pct">{pct(v as number | null)}</span> },

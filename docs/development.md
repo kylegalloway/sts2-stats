@@ -208,6 +208,75 @@ npm run lint
 
 ---
 
+## End-to-end (E2E) testing with Playwright
+
+Unit and integration tests (Vitest) cover individual functions with in-memory databases. Playwright covers the full stack: a real browser, a real server, a real SQLite database, and the SSE live-update pipeline.
+
+### Running E2E tests
+
+```bash
+npm run e2e          # headless, one run
+npm run e2e:ui       # opens Playwright's interactive UI explorer
+```
+
+Playwright automatically starts an isolated server on port 3002 and a Vite dev server on port 5174 before the tests run, and tears them down afterwards. They won't conflict with your normal `npm run dev` processes (which use 3001/5173).
+
+### How isolation works
+
+| Concern | Mechanism |
+|---------|-----------|
+| Separate database | `E2E_DB_PATH=sts2-e2e.db` env var; the server picks a different file |
+| No file watcher | `E2E=1` env var disables chokidar in `watcher.ts` |
+| Seeding data | `POST /api/runs/ingest-raw` (E2E-only endpoint) accepts raw `.run` JSON |
+| Cleaning between tests | `POST /api/runs/reset` (E2E-only endpoint) deletes all rows |
+| SSE broadcasts | `ingest-raw` fires the broadcast after a successful insert, so live-update tests work end-to-end |
+
+The two E2E-only endpoints are gated behind `if (process.env.E2E === '1')` in the router and do not exist in production builds.
+
+### Writing a new E2E test
+
+Tests live in `e2e/tests/`. The `seedRun()` and `resetDatabase()` helpers in `e2e/fixtures/seed.ts` handle setup:
+
+```ts
+import { test, expect } from '@playwright/test';
+import { seedRun, resetDatabase } from '../fixtures/seed.js';
+
+const SERVER = 'http://localhost:3002';
+
+test.beforeEach(async () => {
+  await resetDatabase(SERVER);   // wipe between tests
+});
+
+test('my feature works', async ({ page }) => {
+  // Given: some run data exists
+  await seedRun(SERVER, { character: 'Ironclad', victory: true, floors: 20 });
+
+  // When: the user navigates to the dashboard
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Run Log' }).click();
+
+  // Then: the run appears in the table
+  await expect(page.locator('.badge-win')).toBeVisible();
+});
+```
+
+**Selector tips:**
+- Use `.badge-win` / `.badge-loss` for result badges (avoids matching dropdown options that also contain "Win"/"Loss")
+- Use `page.locator('.tcard-head').getByText(/runs/)` for the run count (avoids the header count in the status bar)
+- Use `page.locator('td').filter({ hasText: 'Ironclad' }).first()` for character names in table cells
+- Avoid `waitForLoadState('networkidle')` — the SSE connection keeps the page from ever reaching network idle; wait for a specific DOM element instead
+
+### What is covered
+
+| File | Scenarios |
+|------|-----------|
+| `e2e/tests/overview.spec.ts` | Zero-state, total run count, win rate KPI, per-character breakdown |
+| `e2e/tests/navigation.spec.ts` | All tabs visible, tab switching, active state, Cards/Enemies load |
+| `e2e/tests/run-log.spec.ts` | Run table population, Win/Loss badges, result filter, character filter |
+| `e2e/tests/live-update.spec.ts` | Run Log and Overview update via SSE without page refresh, SSE connection established |
+
+---
+
 ### Worked example: adding a new analytics function
 
 This walkthrough adds a function that returns the average floor reached per character — a useful KPI. It touches the server only (analytics + route). The client side is omitted here but follows the same pattern: add a fetch function in `api/`, add a `useQuery` call in a component.

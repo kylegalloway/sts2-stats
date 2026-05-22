@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
@@ -40,10 +41,13 @@ const delta = (v: number | null) => {
   return `${sign}${v.toFixed(1)}`;
 };
 
+const RARITIES = ['Common', 'Uncommon', 'Rare', 'Starter'];
+
 export default function Cards() {
   const { selectedCharacter, setSelectedCharacter } = useStore();
   const [search, setSearch] = useState('');
   const [progSearch, setProgSearch] = useState('');
+  const [selectedRarity, setSelectedRarity] = useState('');
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -62,6 +66,20 @@ export default function Cards() {
     queryKey: ['card-skip-rates', selectedCharacter],
     queryFn: () => api.getCardSkipRates(selectedCharacter || undefined) as Promise<SkipRateStat[]>,
   });
+
+  const { data: cachedCards } = useQuery<{ id: string; rarity: string | null; color: string | null }[]>({
+    queryKey: ['codex-cached-cards'],
+    queryFn: () => api.getCodexCachedCards(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const rarityMap = new Map<string, string>(
+    (cachedCards ?? []).flatMap((c) => {
+      if (!c.rarity) return [];
+      const displayName = c.id.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+      return [[displayName, c.rarity]];
+    })
+  );
 
   if (isLoading) return <div className="loading">Loading…</div>;
   if (!data) return null;
@@ -82,8 +100,19 @@ export default function Cards() {
     .sort((a, b) => b.underrated_score - a.underrated_score)
     .slice(0, 15);
 
+  const filteredCards = selectedRarity
+    ? data.cards.filter((c) => rarityMap.get(formatName(c.card_id)) === selectedRarity)
+    : data.cards;
+
   const mainCols: Column<CardStat>[] = [
-    { key: 'card_id', label: 'Card', render: (v) => <span>{formatName(v as string)}</span> },
+    {
+      key: 'card_id', label: 'Card',
+      render: (v) => (
+        <EntityTooltip name={formatName(v as string)} entityType="card">
+          <span>{formatName(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
     { key: 'offered', label: 'Seen', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'picked', label: 'Picked', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'pick_rate', label: 'Pick Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
@@ -92,7 +121,14 @@ export default function Cards() {
   ];
 
   const progCols: Column<CardProgressionStat>[] = [
-    { key: 'card_id', label: 'Card', render: (v) => <span>{formatName(v as string)}</span> },
+    {
+      key: 'card_id', label: 'Card',
+      render: (v) => (
+        <EntityTooltip name={formatName(v as string)} entityType="card">
+          <span>{formatName(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
     { key: 'times_offered', label: 'Offered', render: (v) => <span className="num">{num(v as number)}</span> },
     { key: 'pick_rate', label: 'Pick Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
     { key: 'avg_floor_when_picked', label: 'Avg Floor (Took)', render: (v) => <span className="num">{fl(v as number | null)}</span> },
@@ -126,6 +162,15 @@ export default function Cards() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Rarity</span>
+          <select value={selectedRarity} onChange={(e) => setSelectedRarity(e.target.value)}>
+            <option value="">All</option>
+            {RARITIES.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {skipRates && skipRates.length > 0 && (
@@ -261,7 +306,7 @@ export default function Cards() {
       <div className="tcard">
         <div className="tcard-head">
           <span className="tcard-title">All Cards</span>
-          <span className="dim" style={{ fontSize: '.75rem' }}>{data.cards.length} cards</span>
+          <span className="dim" style={{ fontSize: '.75rem' }}>{filteredCards.length} cards</span>
           <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginLeft: 'auto' }}>
             <input
               className="search-input"
@@ -274,7 +319,7 @@ export default function Cards() {
         </div>
         <SortableTable
           columns={mainCols}
-          rows={data.cards}
+          rows={filteredCards}
           defaultSortKey="quality_score"
           filterText={search}
           filterKeys={['card_id']}

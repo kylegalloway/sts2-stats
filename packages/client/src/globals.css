@@ -188,3 +188,73 @@ select option { background: var(--s3); }
 
 /* ── Spark bar ── */
 .spark { display: inline-block; height: 4px; border-radius: 2px; background: var(--gold); vertical-align: middle; margin-left: 4px; opacity: .7; }
+
+/* ── Entity Tooltip ── */
+.entity-tooltip-anchor {
+  cursor: help;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--dim);
+  text-underline-offset: 2px;
+}
+.entity-tooltip-panel {
+  position: fixed;
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  padding: .75rem;
+  width: 280px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .7);
+  pointer-events: none;
+  z-index: 9999;
+}
+.entity-tooltip-img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  margin-bottom: .5rem;
+  display: block;
+}
+.entity-tooltip-name {
+  font-family: 'Cinzel', serif;
+  font-size: .85rem;
+  color: var(--gold2);
+  margin-bottom: .35rem;
+}
+.entity-tooltip-meta {
+  display: flex;
+  gap: .4rem;
+  font-size: .7rem;
+  color: var(--muted);
+  margin-bottom: .4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.entity-tooltip-desc {
+  font-size: .78rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+/* Rarity badges */
+.rarity-badge {
+  padding: .1rem .4rem;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.rarity-starter  { background: #2a2a3a; color: var(--muted); }
+.rarity-basic    { background: #2a2a3a; color: var(--muted); }
+.rarity-common   { background: #1e2e1e; color: #6abf6a; }
+.rarity-uncommon { background: #1a2540; color: var(--neutral); }
+.rarity-rare     { background: #2d2010; color: var(--gold2); }
+.rarity-ancient  { background: #2a1030; color: #c070e0; }
+/* Inline description formatting */
+.codex-gold   { color: var(--gold2); font-weight: 500; }
+.codex-green  { color: var(--win); font-weight: 500; }
+.codex-red    { color: var(--loss); font-weight: 500; }
+.codex-blue   { color: var(--neutral); font-weight: 500; }
+.codex-purple { color: #c070e0; font-weight: 500; }
+.codex-energy { color: #e8c040; font-weight: 600; }
+.codex-star   { color: var(--gold2); letter-spacing: .05em; }

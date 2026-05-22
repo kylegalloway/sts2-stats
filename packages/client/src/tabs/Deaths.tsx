@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
@@ -49,13 +50,27 @@ export default function Deaths() {
   });
 
   const cols: Column<KillStat>[] = [
-    { key: 'killed_by', label: 'Killed By', render: (v) => <span>{formatEnemy(v as string)}</span> },
+    {
+      key: 'killed_by', label: 'Killed By',
+      render: (v) => (
+        <EntityTooltip name={formatEnemy(v as string)} entityType="monster">
+          <span>{formatEnemy(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
     { key: 'count', label: 'Deaths', render: (v) => <span className="num loss">{String(v)}</span> },
     { key: 'pct', label: '% of Deaths', render: (v) => <span className="pct">{((v as number) * 100).toFixed(1)}%</span> },
   ];
 
   const inflectionCols: Column<EnemyInflectionStat>[] = [
-    { key: 'encounter_id', label: 'Enemy', render: (v) => <span>{formatEnemy(v as string)}</span> },
+    {
+      key: 'encounter_id', label: 'Enemy',
+      render: (v) => (
+        <EntityTooltip name={formatEnemy(v as string)} entityType="monster">
+          <span>{formatEnemy(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
     { key: 'room_type', label: 'Room', render: (v) => <span>{formatName(v as string | null)}</span> },
     { key: 'inflection_appearances', label: 'Inflection Runs', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'avg_damage_in_window', label: 'Avg Dmg (Window)', render: (v) => <span className="num loss">{v == null ? '—' : (v as number).toFixed(1)}</span> },
@@ -65,7 +80,14 @@ export default function Deaths() {
   ];
 
   const bossCols: Column<BossStat>[] = [
-    { key: 'boss', label: 'Boss', render: (v) => <span>{formatEnemy(v as string)}</span> },
+    {
+      key: 'boss', label: 'Boss',
+      render: (v) => (
+        <EntityTooltip name={formatEnemy(v as string)} entityType="monster">
+          <span>{formatEnemy(v as string)}</span>
+        </EntityTooltip>
+      ),
+    },
     { key: 'act', label: 'Act' },
     { key: 'total', label: 'Faced', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'wins', label: 'Wins', render: (v) => <span className="num win">{String(v)}</span> },

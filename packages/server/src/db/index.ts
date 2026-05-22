@@ -5,7 +5,8 @@ import { DDL } from './schema.js';
 import { runMigrations } from './migrations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.resolve(__dirname, '../../../../sts2.db');
+const DB_FILE = process.env.E2E_DB_PATH ?? 'sts2.db';
+const DB_PATH = path.resolve(__dirname, '../../../../', DB_FILE);
 
 export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');

@@ -149,6 +149,10 @@ vite.config.ts.timestamp-*
 *.db-shm
 *.db-wal
 
+# Playwright
+/playwright-report/
+/test-results/
+
 # Claude Code project instructions (personal, not shared)
 CLAUDE.md
 CLAUDE.local.md

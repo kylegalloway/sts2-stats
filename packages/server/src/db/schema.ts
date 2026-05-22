@@ -107,4 +107,13 @@ CREATE TABLE IF NOT EXISTS potion_events (
 );
 CREATE INDEX IF NOT EXISTS idx_potion_events_run_id ON potion_events(run_id);
 CREATE INDEX IF NOT EXISTS idx_potion_events_potion_id ON potion_events(potion_id);
+
+CREATE TABLE IF NOT EXISTS spire_codex_cache (
+  entity_type  TEXT NOT NULL,
+  entity_id    TEXT NOT NULL,
+  data_json    TEXT NOT NULL,
+  fetched_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (entity_type, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_codex_cache_type ON spire_codex_cache(entity_type);
 `;

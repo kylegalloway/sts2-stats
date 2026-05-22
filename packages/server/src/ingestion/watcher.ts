@@ -51,6 +51,11 @@ export async function startWatcher(
   onEvent: (e: WatchEvent) => void,
   profile = 1
 ) {
+  if (process.env.E2E === '1') {
+    console.log('[watcher] E2E mode — file watching disabled');
+    return;
+  }
+
   const dir = await resolveHistoryDir(profile);
   if (!dir) {
     console.warn('[watcher] History directory not found. Use --path to specify manually.');

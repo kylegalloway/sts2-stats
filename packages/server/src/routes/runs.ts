@@ -1,7 +1,29 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
+import { ingestRun } from '../ingestion/ingest.js';
+import { broadcast } from '../events.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const router = new Hono();
+
+if (process.env.E2E === '1') {
+  router.post('/ingest-raw', async (c) => {
+    const { fileName, payload } = await c.req.json() as { fileName: string; payload: unknown };
+    const tmp = path.join(os.tmpdir(), fileName);
+    fs.writeFileSync(tmp, JSON.stringify(payload));
+    const result = ingestRun(db, tmp);
+    fs.unlinkSync(tmp);
+    if (result === 'inserted') broadcast({ type: 'run_added', file: fileName });
+    return c.json({ result });
+  });
+
+  router.post('/reset', (c) => {
+    db.exec('DELETE FROM runs');
+    return c.json({ ok: true });
+  });
+}
 
 router.get('/', (c) => {
   const character = c.req.query('character') || undefined;

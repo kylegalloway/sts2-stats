@@ -29,4 +29,7 @@ export const api = {
   getCardSkipRates: (character?: string) => get('/cards/skip-rates', character ? { character } : {}),
   getPotions: (character?: string) => get('/potions', character ? { character } : {}),
   getStatus: () => get('/status'),
+  getCodexEntity: (type: 'card' | 'relic' | 'monster' | 'event', name: string) =>
+    get(`/codex/${type}/${encodeURIComponent(name)}`),
+  getCodexCachedCards: () => get<{ id: string; rarity: string | null; color: string | null }[]>('/codex/cached/cards'),
 };
