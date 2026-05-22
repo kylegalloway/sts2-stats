@@ -1,19 +1,6 @@
 // TypeScript port of sts2_export.py's _normalize_run() function.
-// See PLANS.md for the full migration plan and gotcha notes.
 
-const ACT_BOUNDS: [string, number, number][] = [
-  ['Act 1', 1, 16],
-  ['Act 2', 17, 33],
-  ['Act 3+', 34, 999],
-];
-
-function floorToAct(floor: number | null): string {
-  if (floor == null) return 'Unknown';
-  for (const [name, lo, hi] of ACT_BOUNDS) {
-    if (floor >= lo && floor <= hi) return name;
-  }
-  return 'Act 3+';
-}
+const ACT_LABELS = ['Act 1', 'Act 2', 'Act 3+', 'Act 4+'];
 
 function cleanId(raw: string, prefix = ''): string {
   let s = raw ?? '';
@@ -63,6 +50,13 @@ export interface PotionEvent {
   event_type: 'obtained' | 'declined' | 'used' | 'discarded';
 }
 
+export interface FinalDeckCard {
+  position: number;
+  card_id: string;
+  upgrade_level: number;
+  enchantment_id: string | null;
+}
+
 export interface NormalizedRun {
   file_name: string;
   character: string;
@@ -74,6 +68,18 @@ export interface NormalizedRun {
   killed_by: string | null;
   timestamp: string | null;
   acts: string[];
+  seed: string | null;
+  game_mode: string | null;
+  was_abandoned: boolean;
+  build_id: string | null;
+  deck_size: number;
+  cards_upgraded: number;
+  cards_removed_count: number;
+  cards_transformed: number;
+  campfire_smiths: number;
+  campfire_heals: number;
+  total_damage_taken: number;
+  elite_count: number;
   card_choices: CardChoice[];
   relics_obtained: RelicObtained[];
   damage_per_floor: DamageFloor[];
@@ -82,6 +88,7 @@ export interface NormalizedRun {
   max_hp_per_floor: (number | null)[];
   gold_per_floor: (number | null)[];
   potion_events: PotionEvent[];
+  final_deck: FinalDeckCard[];
 }
 
 export function normalizeRun(raw: Record<string, unknown>, fileName: string): NormalizedRun {
@@ -92,8 +99,18 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
   const character = charRaw.replace('CHARACTER.', '');
 
   const mph = (raw.map_point_history as unknown[][] | undefined) ?? [];
-  const points = mph.flat() as Record<string, unknown>[];
-  const floorReached = points.length;
+  const floorActMap = new Map<number, string>();
+  let floorReached = 0;
+  const pointsWithAct: { pt: Record<string, unknown>; floor: number; act: string }[] = [];
+  for (let actIdx = 0; actIdx < mph.length; actIdx++) {
+    const actPoints = mph[actIdx] as Record<string, unknown>[];
+    const actLabel = ACT_LABELS[actIdx] ?? `Act ${actIdx + 1}`;
+    for (const pt of actPoints) {
+      floorReached++;
+      floorActMap.set(floorReached, actLabel);
+      pointsWithAct.push({ pt, floor: floorReached, act: actLabel });
+    }
+  }
 
   const hpPerFloor: (number | null)[] = [];
   const maxHpPerFloor: (number | null)[] = [];
@@ -104,10 +121,7 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
   const floorNodes: FloorNode[] = [];
   const potionEvents: PotionEvent[] = [];
 
-  for (let idx = 0; idx < points.length; idx++) {
-    const pt = points[idx];
-    const floor = idx + 1;
-    const act = floorToAct(floor);
+  for (const { pt, floor, act } of pointsWithAct) {
     const psList = (pt.player_stats as Record<string, unknown>[] | undefined) ?? [];
     const ps = psList[0] ?? {};
 
@@ -161,7 +175,7 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
   for (const relic of playerRelics) {
     const key = cleanId((relic.id as string | null) ?? '', 'RELIC.');
     const floor = (relic.floor_added_to_deck as number | null) ?? null;
-    const act = floor != null ? floorToAct(floor) : 'Unknown';
+    const act = floor != null ? (floorActMap.get(floor) ?? 'Unknown') : 'Unknown';
     if (key) relicsMap.set(key, { key, floor, act });
   }
 
@@ -176,6 +190,47 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     ? cleanId(killedByEvent, 'EVENT.')
     : null;
 
+  // Per-run aggregate stats
+  let cardsUpgraded = 0;
+  let cardsRemovedCount = 0;
+  let cardsTransformed = 0;
+  let campfireSmiths = 0;
+  let campfireHeals = 0;
+  let totalDamageTaken = 0;
+  let eliteCount = 0;
+
+  for (const { pt } of pointsWithAct) {
+    const rooms = (pt.rooms as Record<string, unknown>[] | undefined) ?? [];
+    const room = rooms[0] ?? {};
+    const roomType = (room.room_type as string | null) ?? '';
+    if (roomType.toUpperCase().includes('ELITE')) eliteCount++;
+
+    const psList = (pt.player_stats as Record<string, unknown>[] | undefined) ?? [];
+    const ps = psList[0] ?? {};
+    totalDamageTaken += (ps.damage_taken as number | null) ?? 0;
+    cardsUpgraded += ((ps.cards_upgraded as unknown[] | undefined) ?? []).length;
+    cardsRemovedCount += ((ps.cards_removed as unknown[] | undefined) ?? []).length;
+    cardsTransformed += ((ps.cards_transformed as unknown[] | undefined) ?? []).length;
+    for (const choice of (ps.rest_site_choices as string[] | undefined) ?? []) {
+      const c = choice.toUpperCase();
+      if (c.includes('SMITH') || c.includes('UPGRADE')) campfireSmiths++;
+      else if (c.includes('HEAL') || c.includes('REST')) campfireHeals++;
+    }
+  }
+
+  // Final deck
+  const deckRaw = (player.deck as Record<string, unknown>[] | undefined) ?? [];
+  const finalDeck: FinalDeckCard[] = deckRaw.map((card, i) => {
+    const idRaw = (card.id as string | null) ?? '';
+    const cardId = cleanId(idRaw, 'CARD.');
+    return {
+      position: i,
+      card_id: cardId,
+      upgrade_level: (card.current_upgrade_level as number | null) ?? 0,
+      enchantment_id: (card.enchantment as string | null) ?? null,
+    };
+  });
+
   return {
     file_name: fileName,
     character,
@@ -187,6 +242,18 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     killed_by: killedBy,
     timestamp: (g(raw, 'start_time') as string | null) ?? null,
     acts,
+    seed: (g(raw, 'seed') as string | null) ?? null,
+    game_mode: (g(raw, 'game_mode') as string | null) ?? null,
+    was_abandoned: Boolean(g(raw, 'was_abandoned')),
+    build_id: (g(raw, 'build_id') as string | null) ?? null,
+    deck_size: deckRaw.length,
+    cards_upgraded: cardsUpgraded,
+    cards_removed_count: cardsRemovedCount,
+    cards_transformed: cardsTransformed,
+    campfire_smiths: campfireSmiths,
+    campfire_heals: campfireHeals,
+    total_damage_taken: totalDamageTaken,
+    elite_count: eliteCount,
     card_choices: cardChoices,
     relics_obtained: Array.from(relicsMap.values()),
     damage_per_floor: damagePerFloor,
@@ -195,5 +262,6 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
     max_hp_per_floor: maxHpPerFloor,
     gold_per_floor: goldPerFloor,
     potion_events: potionEvents,
+    final_deck: finalDeck,
   };
 }

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { type EntityType } from '../codex/nameToId.js';
 import { fetchCodexEntity } from '../codex/service.js';
+import { warmCodexCards } from '../codex/warmup.js';
 
 const router = new Hono();
 const VALID_TYPES: EntityType[] = ['card', 'relic', 'monster', 'event'];
@@ -19,29 +20,12 @@ router.get('/cached/cards', (c) => {
 });
 
 router.post('/seed-cards', async (c) => {
-  const res = await fetch('https://spire-codex.com/api/cards?limit=600', {
-    headers: { Accept: 'application/json', 'User-Agent': 'sts2-stats/1.0' },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) return c.json({ error: `spire-codex returned ${res.status}` }, 502);
-
-  const cards = (await res.json()) as { id: string; [key: string]: unknown }[];
-
-  const upsert = db.prepare(`
-    INSERT INTO spire_codex_cache (entity_type, entity_id, data_json, fetched_at)
-    VALUES ('card', ?, ?, datetime('now'))
-    ON CONFLICT (entity_type, entity_id) DO UPDATE SET
-      data_json = excluded.data_json,
-      fetched_at = excluded.fetched_at
-  `);
-
-  db.transaction(() => {
-    for (const card of cards) {
-      upsert.run(card.id.toLowerCase().replace(/_/g, '_'), JSON.stringify(card));
-    }
-  })();
-
-  return c.json({ inserted: cards.length });
+  try {
+    const inserted = await warmCodexCards(db, true);
+    return c.json({ inserted });
+  } catch {
+    return c.json({ error: 'upstream error' }, 502);
+  }
 });
 
 router.get('/:type/:name', async (c) => {

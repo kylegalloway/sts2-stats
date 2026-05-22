@@ -91,6 +91,7 @@ export default function Relics() {
             data={topQuality.map((r) => ({ label: formatName(r.relic_key), value: +(r.quality_score ?? 0).toFixed(3) }))}
             color="#c9903c"
             height={Math.max(180, topQuality.length * 32)}
+            entityType="relic"
           />
         </div>
         <div className="chart-card">
@@ -100,6 +101,7 @@ export default function Relics() {
             color="#52b875"
             valueFormatter={(v) => `${v}%`}
             height={Math.max(180, topWR.length * 32)}
+            entityType="relic"
           />
         </div>
       </div>

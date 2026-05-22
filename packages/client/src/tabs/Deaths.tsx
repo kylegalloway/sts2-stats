@@ -128,6 +128,7 @@ export default function Deaths() {
               data={top15.map((k) => ({ label: formatEnemy(k.killed_by), value: k.count }))}
               color="#e05c5c"
               height={Math.max(200, top15.length * 36)}
+              entityType="monster"
             />
           </div>
         </div>

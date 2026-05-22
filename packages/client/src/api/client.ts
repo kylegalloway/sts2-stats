@@ -35,4 +35,8 @@ export const api = {
     get(`/codex/${type}/${encodeURIComponent(name)}`),
   getCodexCachedCards: () => get<{ id: string; rarity: string | null; color: string | null }[]>('/codex/cached/cards'),
   seedCodexCards: () => fetch(`${BASE}/codex/seed-cards`, { method: 'POST' }).then((r) => r.json()),
+  getRecords: (character?: string) => get('/records', character ? { character } : {}),
+  getWinFingerprint: (character?: string) => get('/overview/win-fingerprint', character ? { character } : {}),
+  getActVariants: (character?: string) => get('/overview/act-variants', character ? { character } : {}),
+  getEnchantments: (character?: string) => get('/cards/enchantments', character ? { character } : {}),
 };

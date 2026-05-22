@@ -13,6 +13,8 @@ import hpGoldRoutes from './routes/hpgold.js';
 import killsRoutes from './routes/kills.js';
 import potionsRoutes from './routes/potions.js';
 import codexRoutes from './routes/codex.js';
+import recordsRoutes from './routes/records.js';
+import { warmCodexCards } from './codex/warmup.js';
 
 const app = new Hono();
 
@@ -35,6 +37,7 @@ app.route('/api/hp-gold', hpGoldRoutes);
 app.route('/api/kills', killsRoutes);
 app.route('/api/potions', potionsRoutes);
 app.route('/api/codex', codexRoutes);
+app.route('/api/records', recordsRoutes);
 
 app.get('/api/status', (c) => {
   const total = (db.prepare('SELECT COUNT(*) as n FROM runs').get() as { n: number }).n;
@@ -87,3 +90,7 @@ startWatcher(db, broadcastEvent);
 serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+if (process.env.E2E !== '1') {
+  warmCodexCards(db).catch((e) => console.warn('[codex] warmup error:', e));
+}

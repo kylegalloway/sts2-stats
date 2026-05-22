@@ -14,6 +14,7 @@ interface OverviewData {
   timeline: { id: number; character: string; victory: number; floor_reached: number; timestamp: string; ascension: number }[];
 }
 interface ActRoute { acts: string; total: number; wins: number; win_rate: number; avg_floor?: number; }
+interface ActVariant { act_name: string; total: number; wins: number; win_rate: number; }
 interface AscensionStat { ascension: number; total: number; wins: number; win_rate: number; }
 interface PathCompositionRow { victory: number; act: string; node_type: string; node_count: number; run_count: number; }
 
@@ -49,6 +50,11 @@ export default function Overview() {
   const { data: pathData } = useQuery<PathCompositionRow[]>({
     queryKey: ['path-composition', char],
     queryFn: () => api.getPathComposition(char || undefined) as Promise<PathCompositionRow[]>,
+  });
+
+  const { data: actVariants } = useQuery<ActVariant[]>({
+    queryKey: ['act-variants', char],
+    queryFn: () => api.getActVariants(char || undefined) as Promise<ActVariant[]>,
   });
 
   if (isLoading) return <div className="loading">Loading…</div>;
@@ -217,6 +223,25 @@ export default function Overview() {
           <div className="tcard">
             <div className="tcard-head"><span className="tcard-title">Avg Nodes per Run — Wins vs Losses</span></div>
             <SortableTable columns={pathCols} rows={pathRows} defaultSortKey="act" />
+          </div>
+        </>
+      )}
+
+      {(actVariants ?? []).length > 0 && (
+        <>
+          <div className="section-label">Act Variant Win Rates</div>
+          <div className="tcard">
+            <div className="tcard-head"><span className="tcard-title">Win Rate by Act Variant</span></div>
+            <SortableTable
+              columns={[
+                { key: 'act_name', label: 'Act Variant' },
+                { key: 'total', label: 'Runs', render: (v) => <span className="num">{String(v)}</span> },
+                { key: 'wins', label: 'Wins', render: (v) => <span className="num win">{String(v)}</span> },
+                { key: 'win_rate', label: 'Win Rate', render: (v) => <span className="pct">{pct(v as number)}</span> },
+              ]}
+              rows={actVariants!}
+              defaultSortKey="win_rate"
+            />
           </div>
         </>
       )}

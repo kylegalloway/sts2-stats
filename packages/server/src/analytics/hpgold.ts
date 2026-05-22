@@ -35,14 +35,19 @@ export interface ResourceEfficiencyStat {
   resource_efficiency_score: number | null;
 }
 
-// HP% × gold at the Act 1/Act 2 boundary (floor 16) as a leading indicator
-// of run health. Runs that bank resources early tend to go further.
-export function getResourceEfficiencyStats(db: Database.Database, character?: string, actEndFloor = 16): ResourceEfficiencyStat[] {
+// HP% × gold at the actual Act 1 end floor (derived from floor_nodes) as a leading
+// indicator of run health. Uses the per-run act boundary instead of a hardcoded floor.
+export function getResourceEfficiencyStats(db: Database.Database, character?: string): ResourceEfficiencyStat[] {
   const charAnd = character ? 'AND r.character = ?' : '';
-  const params: unknown[] = [actEndFloor];
-  if (character) params.push(character);
+  const params = character ? [character] : [];
 
   return db.prepare(`
+    WITH act1_end AS (
+      SELECT run_id, MAX(floor) AS end_floor
+      FROM floor_nodes
+      WHERE act = 'Act 1'
+      GROUP BY run_id
+    )
     SELECT
       r.id AS run_id,
       r.character,
@@ -51,10 +56,11 @@ export function getResourceEfficiencyStats(db: Database.Database, character?: st
       CAST(hg.hp AS REAL) / NULLIF(hg.max_hp, 0) AS hp_pct_at_act1_end,
       hg.gold AS gold_at_act1_end
     FROM runs r
-    JOIN hp_gold_per_floor hg ON hg.run_id = r.id AND hg.floor = ?
-    WHERE r.floor_reached >= ? ${charAnd}
+    JOIN act1_end ae ON ae.run_id = r.id
+    JOIN hp_gold_per_floor hg ON hg.run_id = r.id AND hg.floor = ae.end_floor
+    WHERE 1=1 ${charAnd}
     ORDER BY r.timestamp, r.id
-  `).all(...params, actEndFloor, ...(character ? [character] : [])).map((row: unknown) => {
+  `).all(...params).map((row: unknown) => {
     const r = row as Omit<ResourceEfficiencyStat, 'resource_efficiency_score'>;
     return {
       ...r,
@@ -75,8 +81,8 @@ export interface ResourceEfficiencyCorrelation {
 
 // Buckets runs by their Act 1 end resource score and shows avg floor_reached
 // per bucket — lets you see the score-to-progression relationship.
-export function getResourceEfficiencyCorrelation(db: Database.Database, character?: string, actEndFloor = 16, bucketSize = 50): ResourceEfficiencyCorrelation[] {
-  const rows = getResourceEfficiencyStats(db, character, actEndFloor)
+export function getResourceEfficiencyCorrelation(db: Database.Database, character?: string, bucketSize = 50): ResourceEfficiencyCorrelation[] {
+  const rows = getResourceEfficiencyStats(db, character)
     .filter((r) => r.resource_efficiency_score != null);
 
   const buckets = new Map<number, { floors: number[]; scores: number[] }>();

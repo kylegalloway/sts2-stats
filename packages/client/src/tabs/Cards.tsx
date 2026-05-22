@@ -56,6 +56,7 @@ interface CardProgressionStat {
 }
 interface CardsResponse { cards: CardStat[]; elo: CardElo[]; progression: CardProgressionStat[]; }
 interface SkipRateStat { act: string; total_choices: number; skipped: number; skip_rate: number; }
+interface EnchantmentStat { enchantment_id: string; total_runs: number; wins: number; win_rate: number; }
 
 const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 const num = (v: number | null) => v == null ? '—' : v.toFixed(0);
@@ -106,6 +107,11 @@ export default function Cards() {
   const { data: upgradeData } = useQuery<{ upgrade_impact: UpgradeImpact[] }>({
     queryKey: ['cards-upgrade-impact', selectedCharacter],
     queryFn: () => api.getUpgradeImpact(selectedCharacter || undefined) as Promise<{ upgrade_impact: UpgradeImpact[] }>,
+  });
+
+  const { data: enchantmentData } = useQuery<{ enchantments: EnchantmentStat[] }>({
+    queryKey: ['enchantments', selectedCharacter],
+    queryFn: () => api.getEnchantments(selectedCharacter || undefined) as Promise<{ enchantments: EnchantmentStat[] }>,
   });
 
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
@@ -304,6 +310,7 @@ export default function Cards() {
             data={topElo.map((c) => ({ label: formatName(c.card_id), value: Math.round(c.elo) }))}
             color="#c9903c"
             height={Math.max(180, topElo.length * 32)}
+            entityType="card"
           />
         </div>
         <div className="chart-card">
@@ -312,6 +319,7 @@ export default function Cards() {
             data={topQuality.map((c) => ({ label: formatName(c.card_id), value: +(c.quality_score ?? 0).toFixed(3) }))}
             color="#5b8dd9"
             height={Math.max(180, topQuality.length * 32)}
+            entityType="card"
           />
         </div>
       </div>
@@ -341,6 +349,7 @@ export default function Cards() {
                   color="#c94040"
                   height={Math.max(180, topOverrated.length * 32)}
                   valueFormatter={(v) => `${v} fl`}
+                  entityType="card"
                 />
               </div>
             )}
@@ -358,6 +367,7 @@ export default function Cards() {
                   color="#40a070"
                   height={Math.max(180, topUnderrated.length * 32)}
                   valueFormatter={(v) => `${v} fl`}
+                  entityType="card"
                 />
               </div>
             )}
@@ -520,6 +530,25 @@ export default function Cards() {
             columns={upgradeCols}
             rows={upgradeData.upgrade_impact}
             defaultSortKey="win_rate_upgraded"
+          />
+        </div>
+      )}
+
+      {enchantmentData && enchantmentData.enchantments.length > 0 && (
+        <div className="tcard">
+          <div className="tcard-head">
+            <span className="tcard-title">Enchantments</span>
+            <span className="dim" style={{ fontSize: '.75rem' }}>Win rate by enchantment type on final deck cards</span>
+          </div>
+          <SortableTable
+            columns={[
+              { key: 'enchantment_id', label: 'Enchantment', render: (v) => <span>{formatName(v as string)}</span> },
+              { key: 'total_runs', label: 'Runs', render: (v) => <span className="num">{num(v as number)}</span> },
+              { key: 'wins', label: 'Wins', render: (v) => <span className="num win">{num(v as number)}</span> },
+              { key: 'win_rate', label: 'Win Rate', render: (v) => <span className="pct">{pct(v as number | null)}</span> },
+            ]}
+            rows={enchantmentData.enchantments}
+            defaultSortKey="total_runs"
           />
         </div>
       )}

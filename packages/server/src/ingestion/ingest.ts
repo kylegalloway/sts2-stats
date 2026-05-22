@@ -36,8 +36,20 @@ export function reIngestRun(db: Database.Database, filePath: string): IngestResu
 
 function insertRun(db: Database.Database, run: ReturnType<typeof normalizeRun>, raw: unknown) {
   const insertRunStmt = db.prepare(`
-    INSERT INTO runs (file_name, character, victory, ascension, floor_reached, final_gold, run_time, killed_by, timestamp, acts, raw_json)
-    VALUES (@file_name, @character, @victory, @ascension, @floor_reached, @final_gold, @run_time, @killed_by, @timestamp, @acts, @raw_json)
+    INSERT INTO runs (
+      file_name, character, victory, ascension, floor_reached, final_gold, run_time,
+      killed_by, timestamp, acts, raw_json,
+      seed, game_mode, was_abandoned, build_id,
+      deck_size, cards_upgraded, cards_removed_count, cards_transformed,
+      campfire_smiths, campfire_heals, total_damage_taken, elite_count
+    )
+    VALUES (
+      @file_name, @character, @victory, @ascension, @floor_reached, @final_gold, @run_time,
+      @killed_by, @timestamp, @acts, @raw_json,
+      @seed, @game_mode, @was_abandoned, @build_id,
+      @deck_size, @cards_upgraded, @cards_removed_count, @cards_transformed,
+      @campfire_smiths, @campfire_heals, @total_damage_taken, @elite_count
+    )
   `);
 
   const insertChoice = db.prepare(`
@@ -70,10 +82,16 @@ function insertRun(db: Database.Database, run: ReturnType<typeof normalizeRun>, 
     VALUES (@run_id, @floor, @room_type, @act, @potion_id, @event_type)
   `);
 
+  const insertDeckCard = db.prepare(`
+    INSERT OR IGNORE INTO final_deck (run_id, position, card_id, upgrade_level, enchantment_id)
+    VALUES (@run_id, @position, @card_id, @upgrade_level, @enchantment_id)
+  `);
+
   db.transaction(() => {
     const { lastInsertRowid } = insertRunStmt.run({
       ...run,
       victory: run.victory ? 1 : 0,
+      was_abandoned: run.was_abandoned ? 1 : 0,
       acts: JSON.stringify(run.acts),
       raw_json: JSON.stringify(raw),
     });
@@ -112,6 +130,10 @@ function insertRun(db: Database.Database, run: ReturnType<typeof normalizeRun>, 
 
     for (const pe of run.potion_events) {
       insertPotion.run({ run_id: runId, ...pe });
+    }
+
+    for (const card of run.final_deck) {
+      insertDeckCard.run({ run_id: runId, ...card });
     }
   })();
 }

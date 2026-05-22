@@ -175,6 +175,156 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       CREATE INDEX IF NOT EXISTS idx_codex_cache_type ON spire_codex_cache(entity_type);
     `);
   },
+  8: (db) => {
+    // Re-derive act labels from the 2D map_point_history structure instead of
+    // the old hardcoded floor-range approach (Act 1: 1-16, Act 2: 17-33).
+    // Fixes: 17-floor Act 1 runs had floor 17 (the act 1 boss) mislabeled "Act 2".
+    const ACT_LABELS = ['Act 1', 'Act 2', 'Act 3+', 'Act 4+'];
+    const runs = db.prepare('SELECT id, raw_json FROM runs').all() as { id: number; raw_json: string }[];
+
+    const updateFloorNode = db.prepare(`UPDATE floor_nodes SET act = ? WHERE run_id = ? AND floor = ?`);
+    const updateCardChoice = db.prepare(`UPDATE card_choices SET act = ? WHERE run_id = ? AND floor = ?`);
+    const updatePotionEvent = db.prepare(`UPDATE potion_events SET act = ? WHERE run_id = ? AND floor = ?`);
+    const updateRelic = db.prepare(`UPDATE relics_obtained SET act = ? WHERE run_id = ? AND relic_key = ?`);
+
+    db.transaction(() => {
+      for (const run of runs) {
+        try {
+          const raw = JSON.parse(run.raw_json) as Record<string, unknown>;
+          const mph = (raw.map_point_history as unknown[][] | undefined) ?? [];
+          const floorActMap = new Map<number, string>();
+          let f = 0;
+          for (let ai = 0; ai < mph.length; ai++) {
+            const actPoints = mph[ai] as unknown[];
+            const actLabel = ACT_LABELS[ai] ?? `Act ${ai + 1}`;
+            for (let _pi = 0; _pi < actPoints.length; _pi++) {
+              f++;
+              floorActMap.set(f, actLabel);
+            }
+          }
+          for (const [floor, act] of floorActMap) {
+            updateFloorNode.run(act, run.id, floor);
+            updateCardChoice.run(act, run.id, floor);
+            updatePotionEvent.run(act, run.id, floor);
+          }
+          const player = ((raw.players as Record<string, unknown>[] | undefined) ?? [{}])[0] ?? {};
+          for (const relic of (player.relics as Record<string, unknown>[] | undefined) ?? []) {
+            const idRaw = (relic.id as string | null) ?? '';
+            let key = idRaw.startsWith('RELIC.') ? idRaw.slice('RELIC.'.length) : idRaw;
+            key = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            const relicFloor = (relic.floor_added_to_deck as number | null) ?? null;
+            if (relicFloor == null || !key) continue;
+            const act = floorActMap.get(relicFloor) ?? 'Unknown';
+            updateRelic.run(act, run.id, key);
+          }
+        } catch { /* skip malformed */ }
+      }
+    })();
+  },
+  9: (db) => {
+    db.exec(`
+      ALTER TABLE runs ADD COLUMN seed TEXT;
+      ALTER TABLE runs ADD COLUMN game_mode TEXT;
+      ALTER TABLE runs ADD COLUMN was_abandoned INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN build_id TEXT;
+      ALTER TABLE runs ADD COLUMN deck_size INTEGER;
+      ALTER TABLE runs ADD COLUMN cards_upgraded INTEGER DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN cards_removed_count INTEGER DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN cards_transformed INTEGER DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN campfire_smiths INTEGER DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN campfire_heals INTEGER DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN total_damage_taken INTEGER DEFAULT 0;
+      ALTER TABLE runs ADD COLUMN elite_count INTEGER DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS final_deck (
+        run_id         INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        position       INTEGER NOT NULL,
+        card_id        TEXT NOT NULL,
+        upgrade_level  INTEGER NOT NULL DEFAULT 0,
+        enchantment_id TEXT,
+        PRIMARY KEY (run_id, position)
+      );
+      CREATE INDEX IF NOT EXISTS idx_final_deck_run_id ON final_deck(run_id);
+      CREATE INDEX IF NOT EXISTS idx_final_deck_enchantment ON final_deck(enchantment_id);
+    `);
+
+    const runs = db.prepare('SELECT id, raw_json FROM runs').all() as { id: number; raw_json: string }[];
+    const updateRun = db.prepare(`
+      UPDATE runs SET
+        seed = ?, game_mode = ?, was_abandoned = ?, build_id = ?,
+        deck_size = ?, cards_upgraded = ?, cards_removed_count = ?,
+        cards_transformed = ?, campfire_smiths = ?, campfire_heals = ?,
+        total_damage_taken = ?, elite_count = ?
+      WHERE id = ?
+    `);
+    const insertDeckCard = db.prepare(`
+      INSERT OR IGNORE INTO final_deck (run_id, position, card_id, upgrade_level, enchantment_id)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    db.transaction(() => {
+      for (const run of runs) {
+        try {
+          const raw = JSON.parse(run.raw_json) as Record<string, unknown>;
+          const player = ((raw.players as Record<string, unknown>[] | undefined) ?? [{}])[0] ?? {};
+          const mph = (raw.map_point_history as unknown[][] | undefined) ?? [];
+
+          let cardsUpgraded = 0;
+          let cardsRemovedCount = 0;
+          let cardsTransformed = 0;
+          let campfireSmiths = 0;
+          let campfireHeals = 0;
+          let totalDamageTaken = 0;
+          let eliteCount = 0;
+
+          for (const actPoints of mph) {
+            for (const pt of actPoints as Record<string, unknown>[]) {
+              const rooms = (pt.rooms as Record<string, unknown>[] | undefined) ?? [];
+              const room = rooms[0] ?? {};
+              const roomType = (room.room_type as string | null) ?? '';
+              if (roomType.toUpperCase().includes('ELITE')) eliteCount++;
+
+              const psList = (pt.player_stats as Record<string, unknown>[] | undefined) ?? [];
+              const ps = psList[0] ?? {};
+
+              totalDamageTaken += (ps.damage_taken as number | null) ?? 0;
+              cardsUpgraded += ((ps.cards_upgraded as unknown[] | undefined) ?? []).length;
+              cardsRemovedCount += ((ps.cards_removed as unknown[] | undefined) ?? []).length;
+              cardsTransformed += ((ps.cards_transformed as unknown[] | undefined) ?? []).length;
+
+              for (const choice of (ps.rest_site_choices as string[] | undefined) ?? []) {
+                const c = (choice as string).toUpperCase();
+                if (c.includes('SMITH') || c.includes('UPGRADE')) campfireSmiths++;
+                else if (c.includes('HEAL') || c.includes('REST')) campfireHeals++;
+              }
+            }
+          }
+
+          const deck = (player.deck as Record<string, unknown>[] | undefined) ?? [];
+          updateRun.run(
+            (raw.seed as string | null) ?? null,
+            (raw.game_mode as string | null) ?? null,
+            (raw.was_abandoned as boolean | null) ? 1 : 0,
+            (raw.build_id as string | null) ?? null,
+            deck.length,
+            cardsUpgraded, cardsRemovedCount, cardsTransformed,
+            campfireSmiths, campfireHeals, totalDamageTaken, eliteCount,
+            run.id
+          );
+
+          for (let i = 0; i < deck.length; i++) {
+            const card = deck[i];
+            const idRaw = (card.id as string | null) ?? '';
+            const cardId = idRaw.startsWith('CARD.') ? idRaw.slice('CARD.'.length) : idRaw;
+            const cleanCardId = cardId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            const upgradeLevel = (card.current_upgrade_level as number | null) ?? 0;
+            const enchantmentId = (card.enchantment as string | null) ?? null;
+            insertDeckCard.run(run.id, i, cleanCardId, upgradeLevel, enchantmentId);
+          }
+        } catch { /* skip malformed */ }
+      }
+    })();
+  },
 };
 
 export function runMigrations(db: Database.Database) {

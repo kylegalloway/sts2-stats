@@ -8,9 +8,10 @@ import Deaths from './tabs/Deaths.js';
 import HpGold from './tabs/HpGold.js';
 import RunLog from './tabs/RunLog.js';
 import Potions from './tabs/Potions.js';
+import Records from './tabs/Records.js';
 import { useStore } from './store.js';
 
-const TABS = ['Overview', 'Cards', 'Relics', 'Potions', 'Synergies', 'Enemies', 'HP & Gold', 'Run Log'] as const;
+const TABS = ['Overview', 'Cards', 'Relics', 'Potions', 'Synergies', 'Enemies', 'HP & Gold', 'Run Log', 'Records'] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_COMPONENTS: Record<TabName, React.ComponentType> = {
@@ -22,6 +23,7 @@ const TAB_COMPONENTS: Record<TabName, React.ComponentType> = {
   'HP & Gold': HpGold,
   'Run Log': RunLog,
   Potions,
+  Records,
 };
 
 export default function App() {

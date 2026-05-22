@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { getCardStats, getCardElo, getCardProgressionStats, getSkipRates, getCardStatsByDimension, getUpgradeImpact } from '../analytics/cards.js';
+import { getCardStats, getCardElo, getCardProgressionStats, getSkipRates, getCardStatsByDimension, getUpgradeImpact, getEnchantments } from '../analytics/cards.js';
 
 const router = new Hono();
 
@@ -31,6 +31,11 @@ router.get('/by-dimension', (c) => {
 router.get('/upgrade-impact', (c) => {
   const character = c.req.query('character') || undefined;
   return c.json({ upgrade_impact: getUpgradeImpact(db, character) });
+});
+
+router.get('/enchantments', (c) => {
+  const character = c.req.query('character') || undefined;
+  return c.json({ enchantments: getEnchantments(db, character) });
 });
 
 export default router;

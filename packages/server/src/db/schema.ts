@@ -116,4 +116,15 @@ CREATE TABLE IF NOT EXISTS spire_codex_cache (
   PRIMARY KEY (entity_type, entity_id)
 );
 CREATE INDEX IF NOT EXISTS idx_codex_cache_type ON spire_codex_cache(entity_type);
+
+CREATE TABLE IF NOT EXISTS final_deck (
+  run_id         INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  position       INTEGER NOT NULL,
+  card_id        TEXT NOT NULL,
+  upgrade_level  INTEGER NOT NULL DEFAULT 0,
+  enchantment_id TEXT,
+  PRIMARY KEY (run_id, position)
+);
+CREATE INDEX IF NOT EXISTS idx_final_deck_run_id ON final_deck(run_id);
+CREATE INDEX IF NOT EXISTS idx_final_deck_enchantment ON final_deck(enchantment_id);
 `;

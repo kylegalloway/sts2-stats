@@ -538,3 +538,28 @@ export function rebuildElo(db: Database.Database, character: string) {
     }
   })();
 }
+
+export interface EnchantmentStat {
+  enchantment_id: string;
+  total_runs: number;
+  wins: number;
+  win_rate: number;
+}
+
+export function getEnchantments(db: Database.Database, character?: string): EnchantmentStat[] {
+  const charAnd = character ? 'AND r.character = ?' : '';
+  const p = character ? [character] : [];
+
+  return db.prepare(`
+    SELECT
+      fd.enchantment_id,
+      COUNT(DISTINCT fd.run_id) AS total_runs,
+      SUM(r.victory) AS wins,
+      CAST(SUM(r.victory) AS REAL) / NULLIF(COUNT(DISTINCT fd.run_id), 0) AS win_rate
+    FROM final_deck fd
+    JOIN runs r ON r.id = fd.run_id
+    WHERE fd.enchantment_id IS NOT NULL ${charAnd}
+    GROUP BY fd.enchantment_id
+    ORDER BY total_runs DESC
+  `).all(...p) as EnchantmentStat[];
+}

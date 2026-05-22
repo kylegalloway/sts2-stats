@@ -52,6 +52,57 @@ export function getAscensionStats(db: Database.Database, character?: string) {
   `).all(...params);
 }
 
+export interface WinFingerprint {
+  win_avg_deck_size: number | null;
+  loss_avg_deck_size: number | null;
+  win_avg_upgrade_rate: number | null;
+  loss_avg_upgrade_rate: number | null;
+  win_avg_cards_purged: number | null;
+  loss_avg_cards_purged: number | null;
+}
+
+export function getWinFingerprint(db: Database.Database, character?: string): WinFingerprint {
+  const where = character ? 'WHERE character = ?' : '';
+  const p = character ? [character] : [];
+
+  const rows = db.prepare(`
+    SELECT
+      AVG(CASE WHEN victory = 1 THEN deck_size END) AS win_avg_deck_size,
+      AVG(CASE WHEN victory = 0 THEN deck_size END) AS loss_avg_deck_size,
+      AVG(CASE WHEN victory = 1 AND deck_size > 0 THEN CAST(cards_upgraded AS REAL) / deck_size END) AS win_avg_upgrade_rate,
+      AVG(CASE WHEN victory = 0 AND deck_size > 0 THEN CAST(cards_upgraded AS REAL) / deck_size END) AS loss_avg_upgrade_rate,
+      AVG(CASE WHEN victory = 1 THEN cards_removed_count END) AS win_avg_cards_purged,
+      AVG(CASE WHEN victory = 0 THEN cards_removed_count END) AS loss_avg_cards_purged
+    FROM runs ${where}
+  `).get(...p) as WinFingerprint;
+
+  return rows;
+}
+
+export interface ActVariant {
+  act_name: string;
+  total: number;
+  wins: number;
+  win_rate: number;
+}
+
+export function getActVariants(db: Database.Database, character?: string): ActVariant[] {
+  const charAnd = character ? 'AND r.character = ?' : '';
+  const p = character ? [character] : [];
+
+  return db.prepare(`
+    SELECT
+      je.value AS act_name,
+      COUNT(*) AS total,
+      SUM(r.victory) AS wins,
+      CAST(SUM(r.victory) AS REAL) / NULLIF(COUNT(*), 0) AS win_rate
+    FROM runs r, json_each(r.acts) je
+    WHERE r.acts IS NOT NULL ${charAnd}
+    GROUP BY je.value
+    ORDER BY total DESC
+  `).all(...p) as ActVariant[];
+}
+
 export function getPathComposition(db: Database.Database, character?: string) {
   const charAnd = character ? 'AND r.character = ?' : '';
   const params = character ? [character] : [];

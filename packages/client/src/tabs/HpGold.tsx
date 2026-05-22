@@ -1,14 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
-import LineChart, { type ReferenceLineSpec } from '../components/charts/LineChart.js';
+import LineChart from '../components/charts/LineChart.js';
 import { useStore } from '../store.js';
-
-// Act boss floors per ACT_BOUNDS: Act 1 ends F16, Act 2 ends F33
-const BOSS_LINES: ReferenceLineSpec[] = [
-  { x: 16, label: 'Act 1 Boss', color: '#e8a23a' },
-  { x: 33, label: 'Act 2 Boss', color: '#5b8dd9' },
-];
 
 interface FloorStat { floor: number; avg_hp_pct: number | null; avg_gold: number | null; sample_size: number; }
 
@@ -62,7 +56,6 @@ export default function HpGold() {
             yTickFormatter={(v) => `${v}%`}
             xTickFormatter={(v) => `F${v}`}
             height={300}
-            referenceLines={BOSS_LINES}
           />
         </div>
       </div>
@@ -76,7 +69,6 @@ export default function HpGold() {
             series={[{ dataKey: 'gold', label: 'Avg Gold', color: '#c9903c' }]}
             xTickFormatter={(v) => `F${v}`}
             height={300}
-            referenceLines={BOSS_LINES}
           />
         </div>
       </div>

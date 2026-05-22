@@ -59,8 +59,6 @@ export function getKills(db: Database.Database, character?: string): KillStat[] 
 
 export interface KillByFloorBand {
   floor_band: string;
-  floor_lo: number;
-  floor_hi: number;
   killed_by: string;
   count: number;
   pct_of_band: number;
@@ -124,46 +122,37 @@ export function getEnemyInflectionStats(db: Database.Database, character?: strin
   `).all(...(character ? [...params, ...params] : [])) as EnemyInflectionStat[];
 }
 
-// Groups deaths by act-aligned floor bands: Act 1 (1-16), Act 2 (17-33), Act 3+ (34+).
-// Within each band shows which enemies kill you most.
+// Groups deaths by act label (from floor_nodes at the death floor).
+// Uses the act column instead of hardcoded floor ranges, so 17-floor Act 1 runs count correctly.
 export function getKillsByFloorBand(db: Database.Database, character?: string): KillByFloorBand[] {
-  const charAnd = character ? 'AND character = ?' : '';
+  const charAnd = character ? 'AND r.character = ?' : '';
   const params = character ? [character] : [];
 
-  const bands: Array<{ label: string; lo: number; hi: number }> = [
-    { label: 'Act 1', lo: 1, hi: 16 },
-    { label: 'Act 2', lo: 17, hi: 33 },
-    { label: 'Act 3+', lo: 34, hi: 9999 },
-  ];
+  const bandTotals = db.prepare(`
+    SELECT COALESCE(fn.act, 'Unknown') AS floor_band, COUNT(*) AS n
+    FROM runs r
+    LEFT JOIN floor_nodes fn ON fn.run_id = r.id AND fn.floor = r.floor_reached
+    WHERE r.victory = 0 ${charAnd}
+    GROUP BY fn.act
+  `).all(...params) as { floor_band: string; n: number }[];
 
-  const result: KillByFloorBand[] = [];
+  const totalsMap = new Map<string, number>(bandTotals.map((b) => [b.floor_band, b.n]));
 
-  for (const band of bands) {
-    const bandTotal = (db.prepare(`
-      SELECT COUNT(*) as n FROM runs
-      WHERE victory = 0 AND floor_reached >= ? AND floor_reached <= ? ${charAnd}
-    `).get(band.lo, band.hi, ...params) as { n: number }).n;
+  const rows = db.prepare(`
+    SELECT COALESCE(fn.act, 'Unknown') AS floor_band, r.killed_by, COUNT(*) AS count
+    FROM runs r
+    LEFT JOIN floor_nodes fn ON fn.run_id = r.id AND fn.floor = r.floor_reached
+    WHERE r.victory = 0 AND r.killed_by IS NOT NULL ${charAnd}
+    GROUP BY fn.act, r.killed_by
+    ORDER BY fn.act, count DESC
+  `).all(...params) as { floor_band: string; killed_by: string; count: number }[];
 
-    const rows = db.prepare(`
-      SELECT killed_by, COUNT(*) AS count
-      FROM runs
-      WHERE victory = 0 AND floor_reached >= ? AND floor_reached <= ?
-        AND killed_by IS NOT NULL ${charAnd}
-      GROUP BY killed_by
-      ORDER BY count DESC
-    `).all(band.lo, band.hi, ...params) as { killed_by: string; count: number }[];
-
-    for (const row of rows) {
-      result.push({
-        floor_band: band.label,
-        floor_lo: band.lo,
-        floor_hi: band.hi,
-        killed_by: row.killed_by,
-        count: row.count,
-        pct_of_band: bandTotal > 0 ? row.count / bandTotal : 0,
-      });
-    }
-  }
-
-  return result;
+  return rows.map((row) => ({
+    floor_band: row.floor_band,
+    killed_by: row.killed_by,
+    count: row.count,
+    pct_of_band: (totalsMap.get(row.floor_band) ?? 0) > 0
+      ? row.count / totalsMap.get(row.floor_band)!
+      : 0,
+  }));
 }
