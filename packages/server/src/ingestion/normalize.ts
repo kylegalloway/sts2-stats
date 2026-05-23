@@ -223,11 +223,17 @@ export function normalizeRun(raw: Record<string, unknown>, fileName: string): No
   const finalDeck: FinalDeckCard[] = deckRaw.map((card, i) => {
     const idRaw = (card.id as string | null) ?? '';
     const cardId = cleanId(idRaw, 'CARD.');
+    const enchRaw = card.enchantment;
+    const enchId = enchRaw == null
+      ? null
+      : typeof enchRaw === 'string'
+        ? cleanId(enchRaw, 'ENCHANTMENT.')
+        : cleanId(((enchRaw as Record<string, unknown>).id as string | null) ?? '', 'ENCHANTMENT.');
     return {
       position: i,
       card_id: cardId,
       upgrade_level: (card.current_upgrade_level as number | null) ?? 0,
-      enchantment_id: (card.enchantment as string | null) ?? null,
+      enchantment_id: enchId || null,
     };
   });
 
