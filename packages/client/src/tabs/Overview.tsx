@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client.js';
 import KpiCard from '../components/shared/KpiCard.js';
 import CharacterSelect, { charColor } from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import LineChart, { type ReferenceLineSpec } from '../components/charts/LineChart.js';
@@ -29,32 +30,42 @@ const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`
 export default function Overview() {
   const char = useStore((s) => s.selectedCharacter);
   const setChar = useStore((s) => s.setSelectedCharacter);
+  const ascension = useStore((s) => s.ascension);
+  const lastN = useStore((s) => s.lastN);
 
   const { data, isLoading } = useQuery<OverviewData>({
-    queryKey: ['overview', char],
-    queryFn: () => api.getOverview(char || undefined) as Promise<OverviewData>,
+    queryKey: ['overview', char, ascension, lastN],
+    queryFn: () => api.getOverview(char || undefined, ascension || undefined, lastN || undefined) as Promise<OverviewData>,
   });
   const { data: routes } = useQuery<ActRoute[]>({
-    queryKey: ['act-routes', char],
+    queryKey: ['act-routes', char, ascension, lastN],
     queryFn: async () => {
-      const r = await api.getActRoutes() as { routes?: ActRoute[] } | ActRoute[];
+      const r = await api.getActRoutes(char || undefined, ascension || undefined, lastN || undefined) as { routes?: ActRoute[] } | ActRoute[];
       return Array.isArray(r) ? r : (r as { routes?: ActRoute[] }).routes ?? [];
     },
   });
 
   const { data: ascensionData } = useQuery<AscensionStat[]>({
-    queryKey: ['ascension', char],
-    queryFn: () => api.getAscensionStats(char || undefined) as Promise<AscensionStat[]>,
+    queryKey: ['ascension', char, ascension, lastN],
+    queryFn: () => api.getAscensionStats(char || undefined, ascension || undefined, lastN || undefined) as Promise<AscensionStat[]>,
   });
 
   const { data: pathData } = useQuery<PathCompositionRow[]>({
-    queryKey: ['path-composition', char],
-    queryFn: () => api.getPathComposition(char || undefined) as Promise<PathCompositionRow[]>,
+    queryKey: ['path-composition', char, ascension, lastN],
+    queryFn: () => api.getPathComposition(char || undefined, ascension || undefined, lastN || undefined) as Promise<PathCompositionRow[]>,
   });
 
   const { data: actVariants } = useQuery<ActVariant[]>({
-    queryKey: ['act-variants', char],
-    queryFn: () => api.getActVariants(char || undefined) as Promise<ActVariant[]>,
+    queryKey: ['act-variants', char, ascension, lastN],
+    queryFn: () => api.getActVariants(char || undefined, ascension || undefined, lastN || undefined) as Promise<ActVariant[]>,
+  });
+
+  const { data: allChars } = useQuery<string[]>({
+    queryKey: ['characters'],
+    queryFn: async () => {
+      const r = await api.getOverview() as { winByChar: { character: string }[] };
+      return r.winByChar.map((c) => c.character).sort();
+    },
   });
 
   if (isLoading) return <div className="loading">Loading…</div>;
@@ -62,7 +73,7 @@ export default function Overview() {
 
   const { kpis, winByChar, timeline } = data;
 
-  const chars = [...new Set(timeline.map((r) => r.character))].sort();
+  const chars = allChars ?? [...new Set(timeline.map((r) => r.character))].sort();
 
   const charBarData = winByChar.map((c) => ({
     label: formatName(c.character),
@@ -139,6 +150,7 @@ export default function Overview() {
     <div className="content">
       <div className="controls">
         <CharacterSelect value={char} onChange={setChar} characters={chars} />
+        <GlobalFilters />
       </div>
 
       <div className="kpi-row">

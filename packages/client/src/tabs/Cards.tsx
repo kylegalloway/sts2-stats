@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
@@ -68,12 +69,17 @@ const delta = (v: number | null) => {
 };
 
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Basic', 'Ancient', 'Curse', 'Status'];
+const CARD_TYPES = ['Attack', 'Skill', 'Power', 'Curse', 'Status'];
+const MIN_OFFERED_OPTIONS = [1, 3, 5, 10, 20];
 
 export default function Cards() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
   const [search, setSearch] = useState('');
   const [progSearch, setProgSearch] = useState('');
+  const [legendOpen, setLegendOpen] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [minOffered, setMinOffered] = useState(1);
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -84,13 +90,13 @@ export default function Cards() {
   });
 
   const { data, isLoading } = useQuery<CardsResponse>({
-    queryKey: ['cards', selectedCharacter],
-    queryFn: () => api.getCards(selectedCharacter || undefined) as Promise<CardsResponse>,
+    queryKey: ['cards', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getCards(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<CardsResponse>,
   });
 
   const { data: skipRates } = useQuery<SkipRateStat[]>({
-    queryKey: ['card-skip-rates', selectedCharacter],
-    queryFn: () => api.getCardSkipRates(selectedCharacter || undefined) as Promise<SkipRateStat[]>,
+    queryKey: ['card-skip-rates', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getCardSkipRates(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<SkipRateStat[]>,
   });
 
   const { data: cachedCards, refetch: refetchCachedCards } = useQuery<{ id: string; rarity: string | null; color: string | null }[]>({
@@ -100,18 +106,18 @@ export default function Cards() {
   });
 
   const { data: dimensionData, refetch: refetchDimension } = useQuery<DimensionBreakdown>({
-    queryKey: ['cards-by-dimension', selectedCharacter],
-    queryFn: () => api.getCardsByDimension(selectedCharacter || undefined) as Promise<DimensionBreakdown>,
+    queryKey: ['cards-by-dimension', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getCardsByDimension(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<DimensionBreakdown>,
   });
 
   const { data: upgradeData } = useQuery<{ upgrade_impact: UpgradeImpact[] }>({
-    queryKey: ['cards-upgrade-impact', selectedCharacter],
-    queryFn: () => api.getUpgradeImpact(selectedCharacter || undefined) as Promise<{ upgrade_impact: UpgradeImpact[] }>,
+    queryKey: ['cards-upgrade-impact', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getUpgradeImpact(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ upgrade_impact: UpgradeImpact[] }>,
   });
 
   const { data: enchantmentData } = useQuery<{ enchantments: EnchantmentStat[] }>({
-    queryKey: ['enchantments', selectedCharacter],
-    queryFn: () => api.getEnchantments(selectedCharacter || undefined) as Promise<{ enchantments: EnchantmentStat[] }>,
+    queryKey: ['enchantments', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getEnchantments(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ enchantments: EnchantmentStat[] }>,
   });
 
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
@@ -135,28 +141,52 @@ export default function Cards() {
     })
   );
 
+  const typeMap = new Map<string, string>(
+    (cachedCards ?? []).flatMap((c) => {
+      if (!c.color) return [];
+      const displayName = c.id.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+      // color field actually holds card type in the codex data
+      return [[displayName, c.color]];
+    })
+  );
+
   if (isLoading) return <div className="loading">Loading…</div>;
   if (!data) return null;
 
   const inRarity = (cardId: string) =>
     !selectedRarity || rarityMap.get(formatName(cardId)) === selectedRarity;
 
-  const filteredCards = data.cards.filter((c) => inRarity(c.card_id));
+  const inType = (cardId: string) =>
+    !selectedType || typeMap.get(formatName(cardId)) === selectedType;
 
-  const topElo = data.elo.filter((c) => inRarity(c.card_id)).slice(0, 20);
+  const meetsMinOffered = (offered: number) => offered >= minOffered;
+
+  const filteredCards = data.cards.filter((c) =>
+    inRarity(c.card_id) && inType(c.card_id) && meetsMinOffered(c.offered)
+  );
+
+  // Lookup so ELO (which has no offered count) can also respect the min-seen threshold
+  const offeredByCard = new Map(data.cards.map((c) => [c.card_id, c.offered]));
+
+  const topElo = data.elo
+    .filter((c) => inRarity(c.card_id) && inType(c.card_id) && meetsMinOffered(offeredByCard.get(c.card_id) ?? 0))
+    .slice(0, 20);
   const topQuality = [...filteredCards]
     .filter((c) => c.quality_score != null)
     .sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0))
     .slice(0, 20);
 
-  const prog = (data.progression ?? []).filter((c) => inRarity(c.card_id));
+  // Progression uses `times_offered` (not `offered`) — apply the same threshold
+  const prog = (data.progression ?? []).filter((c) =>
+    inRarity(c.card_id) && inType(c.card_id) && meetsMinOffered(c.times_offered)
+  );
   const topOverrated = [...prog]
-    .filter((c) => c.overrated_score > 0)
-    .sort((a, b) => b.overrated_score - a.overrated_score)
+    .filter((c) => c.overrated_score > 0 && c.floor_delta != null)
+    .sort((a, b) => (a.floor_delta ?? 0) - (b.floor_delta ?? 0)) // most negative first
     .slice(0, 15);
   const topUnderrated = [...prog]
-    .filter((c) => c.underrated_score > 0)
-    .sort((a, b) => b.underrated_score - a.underrated_score)
+    .filter((c) => c.underrated_score > 0 && c.floor_delta != null)
+    .sort((a, b) => (b.floor_delta ?? 0) - (a.floor_delta ?? 0)) // most positive first
     .slice(0, 15);
 
   const mainCols: Column<CardStat>[] = [
@@ -199,12 +229,12 @@ export default function Cards() {
     },
     {
       key: 'overrated_score',
-      label: 'Risk Score',
+      label: 'Overrated',
       render: (v) => <span className="num">{(v as number) > 0 ? (v as number).toFixed(2) : '—'}</span>,
     },
     {
       key: 'underrated_score',
-      label: 'Opp Score',
+      label: 'Underrated',
       render: (v) => <span className="num">{(v as number) > 0 ? (v as number).toFixed(2) : '—'}</span>,
     },
   ];
@@ -246,12 +276,30 @@ export default function Cards() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
         <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span className="ctrl-label">Rarity</span>
           <select value={selectedRarity} onChange={(e) => setSelectedRarity(e.target.value)}>
             <option value="">All</option>
             {RARITIES.map((r) => (
               <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Type</span>
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+            <option value="">All</option>
+            {CARD_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Min Seen</span>
+          <select value={minOffered} onChange={(e) => setMinOffered(Number(e.target.value))}>
+            {MIN_OFFERED_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n}+</option>
             ))}
           </select>
         </label>
@@ -263,6 +311,29 @@ export default function Cards() {
           Seed Codex Data
         </button>
         {seedStatus && <span className="dim" style={{ fontSize: '.8rem' }}>{seedStatus}</span>}
+      </div>
+
+      <div style={{ margin: '0 0 1rem' }}>
+        <button
+          onClick={() => setLegendOpen((o) => !o)}
+          style={{ background: 'none', border: '1px solid #444', borderRadius: 4, color: '#aaa', fontSize: '.8rem', padding: '3px 10px', cursor: 'pointer' }}
+        >
+          {legendOpen ? '▾' : '▸'} Score glossary
+        </button>
+        {legendOpen && (
+          <div style={{ marginTop: '.5rem', padding: '.75rem 1rem', background: '#1a1a2e', borderRadius: 6, border: '1px solid #333', fontSize: '.82rem', lineHeight: 1.6, display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '.25rem .75rem', color: '#ccc' }}>
+            <strong style={{ color: '#e0c97f' }}>ELO</strong>
+            <span>Rating updated after every run — cards in winning decks gain points, cards in losing decks lose them. Higher = more consistent presence in winning runs.</span>
+            <strong style={{ color: '#e0c97f' }}>Quality Score</strong>
+            <span>Wilson lower-bound on win rate. Balances win% with sample size, so a 70% win rate over 50 runs ranks higher than 100% over 2 runs.</span>
+            <strong style={{ color: '#e0c97f' }}>Floor Δ</strong>
+            <span>Avg floor reached in runs where you took this card minus avg floor in runs where you passed it. Positive = taking it tends to go deeper.</span>
+            <strong style={{ color: '#e0c97f' }}>Overrated</strong>
+            <span>Pick rate × floor penalty: high pick rate card that correlates with shorter runs. Higher score = stronger signal you're taking it too often.</span>
+            <strong style={{ color: '#e0c97f' }}>Underrated</strong>
+            <span>Skip rate × floor bonus: low pick rate card that correlates with deeper runs when taken. Higher score = stronger signal it&apos;s worth picking more.</span>
+          </div>
+        )}
       </div>
 
       {skipRates && skipRates.length > 0 && (
@@ -340,7 +411,7 @@ export default function Cards() {
               <div className="chart-card">
                 <h3>Taking Too Often</h3>
                 <p className="dim" style={{ fontSize: '.75rem', margin: '0 0 .75rem' }}>
-                  High pick rate, but runs go fewer floors when you take it
+                  You pick these often, but runs end earlier when you do. Sorted by largest floor penalty — consider passing more.
                 </p>
                 <HBarChart
                   data={topOverrated.map((c) => ({
@@ -349,7 +420,7 @@ export default function Cards() {
                   }))}
                   color="#c94040"
                   height={Math.max(180, topOverrated.length * 32)}
-                  valueFormatter={(v) => `${v} fl`}
+                  valueFormatter={(v) => `-${v} fl`}
                   entityType="card"
                 />
               </div>
@@ -358,7 +429,7 @@ export default function Cards() {
               <div className="chart-card">
                 <h3>Worth Picking More</h3>
                 <p className="dim" style={{ fontSize: '.75rem', margin: '0 0 .75rem' }}>
-                  Low pick rate, but runs go more floors when you take it
+                  You rarely take these, but runs go deeper when you do. Sorted by largest floor gain — consider picking more.
                 </p>
                 <HBarChart
                   data={topUnderrated.map((c) => ({
@@ -367,7 +438,7 @@ export default function Cards() {
                   }))}
                   color="#40a070"
                   height={Math.max(180, topUnderrated.length * 32)}
-                  valueFormatter={(v) => `${v} fl`}
+                  valueFormatter={(v) => `+${v} fl`}
                   entityType="card"
                 />
               </div>

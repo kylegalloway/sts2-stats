@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
@@ -18,13 +19,15 @@ interface RelicStat {
 }
 
 const RARITIES = ['Common', 'Ancient', 'Starter'];
+const MIN_COUNT_OPTIONS = [1, 2, 3, 5, 10];
 
 const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 
 export default function Relics() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
   const [search, setSearch] = useState('');
   const [selectedRarity, setSelectedRarity] = useState('');
+  const [minCount, setMinCount] = useState(1);
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -35,8 +38,8 @@ export default function Relics() {
   });
 
   const { data, isLoading } = useQuery<{ relics: RelicStat[] }>({
-    queryKey: ['relics', selectedCharacter],
-    queryFn: () => api.getRelics(selectedCharacter || undefined) as Promise<{ relics: RelicStat[] }>,
+    queryKey: ['relics', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getRelics(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ relics: RelicStat[] }>,
   });
 
   const { data: cachedRelics } = useQuery<{ id: string; rarity: string | null }[]>({
@@ -56,9 +59,11 @@ export default function Relics() {
   if (isLoading) return <div className="loading">Loading…</div>;
   if (!data) return null;
 
-  const filteredRelics = selectedRarity
-    ? data.relics.filter((r) => relicRarityMap.get(formatName(r.relic_key)) === selectedRarity)
-    : data.relics;
+  const filteredRelics = data.relics.filter((r) => {
+    if (selectedRarity && relicRarityMap.get(formatName(r.relic_key)) !== selectedRarity) return false;
+    if (r.obtain_count < minCount) return false;
+    return true;
+  });
 
   const topQuality = [...filteredRelics]
     .filter((r) => r.quality_score != null)
@@ -94,12 +99,21 @@ export default function Relics() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
         <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span className="ctrl-label">Rarity</span>
           <select value={selectedRarity} onChange={(e) => setSelectedRarity(e.target.value)}>
             <option value="">All</option>
             {RARITIES.map((r) => (
               <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Min Count</span>
+          <select value={minCount} onChange={(e) => setMinCount(Number(e.target.value))}>
+            {MIN_COUNT_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n}+</option>
             ))}
           </select>
         </label>
@@ -117,6 +131,9 @@ export default function Relics() {
       <div className="charts-row col2">
         <div className="chart-card">
           <h3>Top 20 by Quality Score</h3>
+          <p className="dim" style={{ fontSize: '.75rem', margin: '0 0 .75rem' }}>
+            Wilson lower-bound on win rate — balances win% with sample size so high-n relics rank above fluky small samples.
+          </p>
           <HBarChart
             data={topQuality.map((r) => ({ label: formatName(r.relic_key), value: +(r.quality_score ?? 0).toFixed(3) }))}
             color="#c9903c"
