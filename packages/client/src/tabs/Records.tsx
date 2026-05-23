@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client.js';
 import KpiCard from '../components/shared/KpiCard.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import { useStore } from '../store.js';
 import { formatName } from '../utils/format.js';
@@ -57,7 +58,7 @@ function runLabel(r: RunSummary | null) {
 }
 
 export default function Records() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -68,13 +69,13 @@ export default function Records() {
   });
 
   const { data, isLoading } = useQuery<RecordsData>({
-    queryKey: ['records', selectedCharacter],
-    queryFn: () => api.getRecords(selectedCharacter || undefined) as Promise<RecordsData>,
+    queryKey: ['records', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getRecords(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<RecordsData>,
   });
 
   const { data: fingerprint } = useQuery<WinFingerprint>({
-    queryKey: ['win-fingerprint', selectedCharacter],
-    queryFn: () => api.getWinFingerprint(selectedCharacter || undefined) as Promise<WinFingerprint>,
+    queryKey: ['win-fingerprint', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getWinFingerprint(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<WinFingerprint>,
   });
 
   if (isLoading) return <div className="loading">Loading…</div>;
@@ -102,6 +103,7 @@ export default function Records() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
       </div>
 
       <div className="section-label">Personal Bests</div>

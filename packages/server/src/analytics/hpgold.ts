@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { rf } from './stats-utils.js';
 
 export interface FloorStat {
   floor: number;
@@ -7,9 +8,8 @@ export interface FloorStat {
   sample_size: number;
 }
 
-export function getHpGold(db: Database.Database, character?: string): FloorStat[] {
-  const where = character ? 'WHERE r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getHpGold(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): FloorStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
 
   return db.prepare(`
     SELECT
@@ -19,10 +19,10 @@ export function getHpGold(db: Database.Database, character?: string): FloorStat[
       COUNT(*) AS sample_size
     FROM hp_gold_per_floor hg
     JOIN runs r ON r.id = hg.run_id
-    ${where}
+    ${fR.where}
     GROUP BY hg.floor
     ORDER BY hg.floor
-  `).all(...params) as FloorStat[];
+  `).all(...fR.params) as FloorStat[];
 }
 
 export interface ResourceEfficiencyStat {

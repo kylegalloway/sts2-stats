@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import { useStore } from '../store.js';
@@ -29,7 +30,7 @@ const fmtTime = (s: number | null) => {
 };
 
 export default function RunLog() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
   const [result, setResult] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -44,9 +45,11 @@ export default function RunLog() {
   });
 
   const { data, isLoading } = useQuery<RunsResponse>({
-    queryKey: ['runs', selectedCharacter, result, search, page],
+    queryKey: ['runs', selectedCharacter, ascension, lastN, result, search, page],
     queryFn: () => api.getRuns({
       ...(selectedCharacter ? { character: selectedCharacter } : {}),
+      ...(ascension ? { ascension } : {}),
+      ...(lastN ? { last_n: lastN } : {}),
       ...(result ? { result } : {}),
       ...(search ? { search } : {}),
       page: String(page),
@@ -99,6 +102,7 @@ export default function RunLog() {
           onChange={(c) => { setSelectedCharacter(c); setPage(1); }}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
         <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span className="ctrl-label">Result</span>
           <select value={result} onChange={(e) => { setResult(e.target.value); setPage(1); }}>

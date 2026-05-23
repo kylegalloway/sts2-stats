@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { rf } from './stats-utils.js';
 
 export interface RunSummary {
   id: number;
@@ -46,17 +47,16 @@ const SUMMARY_COLS = `
   r.deck_size, r.total_damage_taken, r.elite_count, r.victory
 `;
 
-export function getPersonalBests(db: Database.Database, character?: string): PersonalBests {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const p = character ? [character] : [];
+export function getPersonalBests(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): PersonalBests {
+  const f = rf({ character, ascension, sinceRunId }, 'r');
 
   function bestWin(orderBy: string): RunSummary | null {
     return db.prepare(`
       SELECT ${SUMMARY_COLS} FROM runs r
-      WHERE r.victory = 1 ${charAnd}
+      WHERE r.victory = 1 ${f.and}
       ORDER BY ${orderBy}
       LIMIT 1
-    `).get(...p) as RunSummary | null;
+    `).get(...f.params) as RunSummary | null;
   }
 
   return {
@@ -68,13 +68,12 @@ export function getPersonalBests(db: Database.Database, character?: string): Per
   };
 }
 
-export function getStreaks(db: Database.Database, character?: string): Streaks {
-  const where = character ? 'WHERE character = ?' : '';
-  const p = character ? [character] : [];
+export function getStreaks(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): Streaks {
+  const f = rf({ character, ascension, sinceRunId });
 
   const rows = db.prepare(
-    `SELECT victory FROM runs ${where} ORDER BY timestamp, id`
-  ).all(...p) as { victory: number }[];
+    `SELECT victory FROM runs ${f.where} ORDER BY timestamp, id`
+  ).all(...f.params) as { victory: number }[];
 
   let currentWin = 0, currentLoss = 0, longestWin = 0, longestLoss = 0;
   let runWin = 0, runLoss = 0;
@@ -96,10 +95,9 @@ export function getStreaks(db: Database.Database, character?: string): Streaks {
   return { current_win_streak: currentWin, current_loss_streak: currentLoss, longest_win_streak: longestWin, longest_loss_streak: longestLoss };
 }
 
-export function getFunStats(db: Database.Database, character?: string): FunStats {
-  const where = character ? 'WHERE character = ?' : '';
-  const charAnd = character ? 'AND character = ?' : '';
-  const p = character ? [character] : [];
+export function getFunStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): FunStats {
+  const f = rf({ character, ascension, sinceRunId });
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
 
   const agg = db.prepare(`
     SELECT
@@ -109,31 +107,31 @@ export function getFunStats(db: Database.Database, character?: string): FunStats
       SUM(total_damage_taken) AS total_damage_taken,
       SUM(final_gold) AS total_gold_earned,
       SUM(CASE WHEN victory = 0 THEN final_gold ELSE 0 END) AS gold_hoarded_at_death
-    FROM runs ${where}
-  `).get(...p) as {
+    FROM runs ${f.where}
+  `).get(...f.params) as {
     total_runs: number; total_time_played_s: number | null; total_floors_climbed: number | null;
     total_damage_taken: number | null; total_gold_earned: number | null; gold_hoarded_at_death: number | null;
   };
 
   const deathFloor = db.prepare(`
     SELECT floor_reached, COUNT(*) AS cnt FROM runs
-    WHERE victory = 0 ${charAnd}
+    WHERE victory = 0 ${f.and}
     GROUP BY floor_reached ORDER BY cnt DESC LIMIT 1
-  `).get(...p) as { floor_reached: number; cnt: number } | null;
+  `).get(...f.params) as { floor_reached: number; cnt: number } | null;
 
   const luckiestWin = db.prepare(`
     SELECT ${SUMMARY_COLS} FROM runs r
-    WHERE r.victory = 1 ${charAnd}
+    WHERE r.victory = 1 ${fR.and}
     ORDER BY r.total_damage_taken DESC NULLS LAST
     LIMIT 1
-  `).get(...p) as RunSummary | null;
+  `).get(...fR.params) as RunSummary | null;
 
   const unluckiestLoss = db.prepare(`
     SELECT ${SUMMARY_COLS} FROM runs r
-    WHERE r.victory = 0 ${charAnd}
+    WHERE r.victory = 0 ${fR.and}
     ORDER BY r.floor_reached DESC
     LIMIT 1
-  `).get(...p) as RunSummary | null;
+  `).get(...fR.params) as RunSummary | null;
 
   return {
     total_runs: agg.total_runs,

@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { rf } from './stats-utils.js';
 
 export interface BossStat {
   boss: string;
@@ -11,9 +12,8 @@ export interface BossStat {
   avg_hp_pct_losses: number | null;
 }
 
-export function getBossStats(db: Database.Database, character?: string): BossStat[] {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getBossStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): BossStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
   return db.prepare(`
     SELECT
       fn.encounter_id AS boss,
@@ -27,10 +27,10 @@ export function getBossStats(db: Database.Database, character?: string): BossSta
     FROM floor_nodes fn
     JOIN runs r ON r.id = fn.run_id
     LEFT JOIN hp_gold_per_floor hg ON hg.run_id = fn.run_id AND hg.floor = fn.floor
-    WHERE fn.node_type = 'boss' AND fn.encounter_id IS NOT NULL ${charAnd}
+    WHERE fn.node_type = 'boss' AND fn.encounter_id IS NOT NULL ${fR.and}
     GROUP BY fn.encounter_id, fn.act
     ORDER BY total DESC
-  `).all(...params) as BossStat[];
+  `).all(...fR.params) as BossStat[];
 }
 
 export interface KillStat {
@@ -39,19 +39,19 @@ export interface KillStat {
   pct: number;
 }
 
-export function getKills(db: Database.Database, character?: string): KillStat[] {
-  const where = character
-    ? 'WHERE victory = 0 AND character = ?'
+export function getKills(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): KillStat[] {
+  const f = rf({ character, ascension, sinceRunId });
+  const defeatBase = f.params.length
+    ? `WHERE victory = 0 ${f.and}`
     : 'WHERE victory = 0';
-  const params = character ? [character] : [];
 
-  const total = (db.prepare(`SELECT COUNT(*) as n FROM runs ${where}`).get(...params) as { n: number }).n;
+  const total = (db.prepare(`SELECT COUNT(*) as n FROM runs ${defeatBase}`).get(...f.params) as { n: number }).n;
 
   return db.prepare(`
     SELECT killed_by, COUNT(*) AS count
-    FROM runs ${where} AND killed_by IS NOT NULL AND killed_by != 'NONE.NONE'
+    FROM runs ${defeatBase} AND killed_by IS NOT NULL AND killed_by != 'NONE.NONE'
     GROUP BY killed_by ORDER BY count DESC
-  `).all(...params).map((row: unknown) => {
+  `).all(...f.params).map((row: unknown) => {
     const r = row as { killed_by: string; count: number };
     return { ...r, pct: total > 0 ? r.count / total : 0 };
   });
@@ -80,9 +80,9 @@ export interface EnemyInflectionStat {
 // Encounters that most frequently appear inside a run's worst 3-floor HP drain
 // window, and how bad those moments were. Identifies enemies that break you
 // rather than just finish you.
-export function getEnemyInflectionStats(db: Database.Database, character?: string): EnemyInflectionStat[] {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getEnemyInflectionStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): EnemyInflectionStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const fR2 = rf({ character, ascension, sinceRunId }, 'r2');
 
   return db.prepare(`
     WITH inflection_window AS (
@@ -95,7 +95,6 @@ export function getEnemyInflectionStats(db: Database.Database, character?: strin
         ri.inflection_floor
       FROM damage_per_floor dpf
       JOIN run_inflection ri ON ri.run_id = dpf.run_id
-      -- floor must be within the 3-floor window ending at inflection_floor
       WHERE dpf.floor > ri.inflection_floor - 3
         AND dpf.floor <= ri.inflection_floor
         AND dpf.encounter_id IS NOT NULL
@@ -111,15 +110,15 @@ export function getEnemyInflectionStats(db: Database.Database, character?: strin
       CAST(SUM(r.victory) AS REAL) / NULLIF(COUNT(DISTINCT iw.run_id), 0) AS win_rate,
       COALESCE((
         SELECT COUNT(*) FROM runs r2
-        WHERE r2.killed_by = iw.encounter_id ${character ? 'AND r2.character = ?' : ''}
+        WHERE r2.killed_by = iw.encounter_id ${fR2.and}
       ), 0) AS kill_count
     FROM inflection_window iw
     JOIN runs r ON r.id = iw.run_id
-    WHERE 1=1 ${charAnd}
+    WHERE 1=1 ${fR.and}
     GROUP BY iw.encounter_id, iw.room_type
     HAVING COUNT(DISTINCT iw.run_id) >= 2
     ORDER BY avg_hp_deficit ASC
-  `).all(...(character ? [...params, ...params] : [])) as EnemyInflectionStat[];
+  `).all(...fR2.params, ...fR.params) as EnemyInflectionStat[];
 }
 
 // Groups deaths by act label (from floor_nodes at the death floor).

@@ -12,34 +12,60 @@ async function get<T>(path: string, params?: Record<string, string>): Promise<T>
   return res.json();
 }
 
+function runParams(character?: string, ascension?: string, lastN?: string): Record<string, string> {
+  const p: Record<string, string> = {};
+  if (character) p.character = character;
+  if (ascension) p.ascension = ascension;
+  if (lastN) p.last_n = lastN;
+  return p;
+}
+
 export const api = {
-  getOverview: (character?: string) => get('/overview', character ? { character } : {}),
+  getOverview: (character?: string, ascension?: string, lastN?: string) =>
+    get('/overview', runParams(character, ascension, lastN)),
   getRuns: (params?: Record<string, string>) => get('/runs', params),
-  getCards: (character?: string) => get('/cards', character ? { character } : {}),
-  getRelics: (character?: string) => get('/relics', character ? { character } : {}),
-  getSynergies: (character?: string, minOccurrences = 2) =>
-    get('/synergies', { ...(character ? { character } : {}), min_occurrences: String(minOccurrences) }),
-  getCores: (character?: string, minRuns = 3) =>
-    get('/synergies/cores', { ...(character ? { character } : {}), min_runs: String(minRuns) }),
-  getHpGold: (character?: string) => get('/hp-gold', character ? { character } : {}),
-  getKills: (character?: string) => get('/kills', character ? { character } : {}),
-  getActRoutes: () => get('/overview/act-routes'),
-  getAscensionStats: (character?: string) => get('/overview/ascension', character ? { character } : {}),
-  getPathComposition: (character?: string) => get('/overview/path-composition', character ? { character } : {}),
-  getBossStats: (character?: string) => get('/kills/bosses', character ? { character } : {}),
-  getEnemyInflection: (character?: string) => get('/kills/inflection', character ? { character } : {}),
-  getCardSkipRates: (character?: string) => get('/cards/skip-rates', character ? { character } : {}),
-  getPotions: (character?: string) => get('/potions', character ? { character } : {}),
+  getCards: (character?: string, ascension?: string, lastN?: string) =>
+    get('/cards', runParams(character, ascension, lastN)),
+  getRelics: (character?: string, ascension?: string, lastN?: string) =>
+    get('/relics', runParams(character, ascension, lastN)),
+  getSynergies: (character?: string, minOccurrences = 2, ascension?: string, lastN?: string) =>
+    get('/synergies', { ...runParams(character, ascension, lastN), min_occurrences: String(minOccurrences) }),
+  getCores: (character?: string, minRuns = 3, ascension?: string, lastN?: string) =>
+    get('/synergies/cores', { ...runParams(character, ascension, lastN), min_runs: String(minRuns) }),
+  getHpGold: (character?: string, ascension?: string, lastN?: string) =>
+    get('/hp-gold', runParams(character, ascension, lastN)),
+  getKills: (character?: string, ascension?: string, lastN?: string) =>
+    get('/kills', runParams(character, ascension, lastN)),
+  getActRoutes: (character?: string, ascension?: string, lastN?: string) =>
+    get('/overview/act-routes', runParams(character, ascension, lastN)),
+  getAscensionStats: (character?: string, ascension?: string, lastN?: string) =>
+    get('/overview/ascension', runParams(character, ascension, lastN)),
+  getPathComposition: (character?: string, ascension?: string, lastN?: string) =>
+    get('/overview/path-composition', runParams(character, ascension, lastN)),
+  getBossStats: (character?: string, ascension?: string, lastN?: string) =>
+    get('/kills/bosses', runParams(character, ascension, lastN)),
+  getEnemyInflection: (character?: string, ascension?: string, lastN?: string) =>
+    get('/kills/inflection', runParams(character, ascension, lastN)),
+  getCardSkipRates: (character?: string, ascension?: string, lastN?: string) =>
+    get('/cards/skip-rates', runParams(character, ascension, lastN)),
+  getPotions: (character?: string, ascension?: string, lastN?: string) =>
+    get('/potions', runParams(character, ascension, lastN)),
   getStatus: () => get('/status'),
-  getCardsByDimension: (character?: string) => get('/cards/by-dimension', character ? { character } : {}),
-  getUpgradeImpact: (character?: string) => get('/cards/upgrade-impact', character ? { character } : {}),
+  getCardsByDimension: (character?: string, ascension?: string, lastN?: string) =>
+    get('/cards/by-dimension', runParams(character, ascension, lastN)),
+  getUpgradeImpact: (character?: string, ascension?: string, lastN?: string) =>
+    get('/cards/upgrade-impact', runParams(character, ascension, lastN)),
   getCodexEntity: (type: 'card' | 'relic' | 'monster' | 'event', name: string) =>
     get(`/codex/${type}/${encodeURIComponent(name)}`),
   getCodexCachedCards: () => get<{ id: string; rarity: string | null; color: string | null }[]>('/codex/cached/cards'),
   getCodexCachedRelics: () => get<{ id: string; rarity: string | null }[]>('/codex/cached/relics'),
   seedCodexCards: () => fetch(`${BASE}/codex/seed-cards`, { method: 'POST' }).then((r) => r.json()),
-  getRecords: (character?: string) => get('/records', character ? { character } : {}),
-  getWinFingerprint: (character?: string) => get('/overview/win-fingerprint', character ? { character } : {}),
-  getActVariants: (character?: string) => get('/overview/act-variants', character ? { character } : {}),
-  getEnchantments: (character?: string) => get('/cards/enchantments', character ? { character } : {}),
+  getRecords: (character?: string, ascension?: string, lastN?: string) =>
+    get('/records', runParams(character, ascension, lastN)),
+  getWinFingerprint: (character?: string, ascension?: string, lastN?: string) =>
+    get('/overview/win-fingerprint', runParams(character, ascension, lastN)),
+  getActVariants: (character?: string, ascension?: string, lastN?: string) =>
+    get('/overview/act-variants', runParams(character, ascension, lastN)),
+  getEnchantments: (character?: string, ascension?: string, lastN?: string) =>
+    get('/cards/enchantments', runParams(character, ascension, lastN)),
 };

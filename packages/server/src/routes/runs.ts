@@ -32,16 +32,31 @@ router.get('/', (c) => {
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
   const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
   const offset = (page - 1) * limit;
+  const ascStr = c.req.query('ascension');
+  const ascension = ascStr != null && ascStr !== '' ? parseInt(ascStr, 10) : undefined;
+  const lastNStr = c.req.query('last_n');
+  const lastN = lastNStr ? parseInt(lastNStr, 10) : undefined;
 
   const conditions: string[] = [];
   const params: unknown[] = [];
 
   if (character) { conditions.push('character = ?'); params.push(character); }
+  if (ascension != null && !isNaN(ascension)) { conditions.push('ascension = ?'); params.push(ascension); }
   if (result === 'win') { conditions.push('victory = 1'); }
   else if (result === 'loss') { conditions.push('victory = 0'); }
   if (search) {
     conditions.push('(character LIKE ? OR killed_by LIKE ? OR acts LIKE ?)');
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+  if (lastN && lastN > 0) {
+    const subConds: string[] = [];
+    const subParams: unknown[] = [];
+    if (character) { subConds.push('character = ?'); subParams.push(character); }
+    if (ascension != null && !isNaN(ascension)) { subConds.push('ascension = ?'); subParams.push(ascension); }
+    const subWhere = subConds.length ? `WHERE ${subConds.join(' AND ')}` : '';
+    const cutoff = db.prepare(`SELECT id FROM runs ${subWhere} ORDER BY id DESC LIMIT 1 OFFSET ?`)
+      .get(...subParams, lastN - 1) as { id: number } | undefined;
+    if (cutoff) { conditions.push('id >= ?'); params.push(cutoff.id); }
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

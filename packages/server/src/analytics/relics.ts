@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { wilsonLower } from './stats-utils.js';
+import { wilsonLower, rf } from './stats-utils.js';
 
 export const STARTING_RELICS = new Set([
   'BURNING BLOOD',     // Ironclad
@@ -21,12 +21,11 @@ export interface RelicStat {
   avg_floor: number | null;
 }
 
-export function getRelicStats(db: Database.Database, character?: string): RelicStat[] {
-  const charWhere = character ? 'WHERE character = ?' : '';
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getRelicStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): RelicStat[] {
+  const f = rf({ character, ascension, sinceRunId });
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
 
-  const totalRuns = (db.prepare(`SELECT COUNT(*) as n FROM runs ${charWhere}`).get(...params) as { n: number }).n;
+  const totalRuns = (db.prepare(`SELECT COUNT(*) as n FROM runs ${f.where}`).get(...f.params) as { n: number }).n;
 
   return db.prepare(`
     SELECT
@@ -37,13 +36,11 @@ export function getRelicStats(db: Database.Database, character?: string): RelicS
       AVG(ro.floor) AS avg_floor
     FROM relics_obtained ro
     JOIN runs r ON r.id = ro.run_id
-    WHERE ${NOT_STARTING_RELIC} ${charAnd}
+    WHERE ${NOT_STARTING_RELIC} ${fR.and}
     GROUP BY ro.relic_key
     ORDER BY obtain_count DESC
-  `).all(totalRuns, ...STARTING_RELIC_PARAMS, ...params).map((row: unknown) => {
+  `).all(totalRuns, ...STARTING_RELIC_PARAMS, ...fR.params).map((row: unknown) => {
     const r = row as RelicStat;
-    // obtain_rate has large n (total runs), so raw value is stable.
-    // win_rate only has n=obtain_count, so apply Wilson lower bound to dampen small samples.
     return { ...r, quality_score: (r.obtain_rate ?? 0) * wilsonLower(Math.round((r.win_rate ?? 0) * r.obtain_count), r.obtain_count) };
   });
 }

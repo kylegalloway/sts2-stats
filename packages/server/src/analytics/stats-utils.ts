@@ -6,3 +6,25 @@ export function wilsonLower(successes: number, n: number): number {
   const p = successes / n;
   return (p + z * z / (2 * n) - z * Math.sqrt((p * (1 - p) + z * z / (4 * n)) / n)) / (1 + z * z / n);
 }
+
+export interface RunFilter {
+  character?: string;
+  ascension?: number;
+  sinceRunId?: number;
+}
+
+// Build WHERE / AND clauses for filtering runs.
+// alias: table alias ('r' for JOINed queries, '' or undefined for direct FROM runs).
+export function rf(filter: RunFilter, alias?: string) {
+  const col = (name: string) => alias ? `${alias}.${name}` : name;
+  const parts: string[] = [];
+  const params: unknown[] = [];
+  if (filter.character) { parts.push(`${col('character')} = ?`); params.push(filter.character); }
+  if (filter.ascension != null) { parts.push(`${col('ascension')} >= ?`); params.push(filter.ascension); }
+  if (filter.sinceRunId != null) { parts.push(`${col('id')} >= ?`); params.push(filter.sinceRunId); }
+  return {
+    where: parts.length ? `WHERE ${parts.join(' AND ')}` : '',
+    and: parts.length ? `AND ${parts.join(' AND ')}` : '',
+    params,
+  };
+}

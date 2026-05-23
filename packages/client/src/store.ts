@@ -5,6 +5,10 @@ interface AppStore {
   setActiveTab: (tab: string) => void;
   selectedCharacter: string;
   setSelectedCharacter: (char: string) => void;
+  ascension: string;
+  setAscension: (asc: string) => void;
+  lastN: string;
+  setLastN: (n: string) => void;
 }
 
 export const useStore = create<AppStore>((set) => ({
@@ -12,4 +16,8 @@ export const useStore = create<AppStore>((set) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   selectedCharacter: '',
   setSelectedCharacter: (char) => set({ selectedCharacter: char }),
+  ascension: '',
+  setAscension: (asc) => set({ ascension: asc }),
+  lastN: '',
+  setLastN: (n) => set({ lastN: n }),
 }));

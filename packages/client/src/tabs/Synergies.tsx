@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import { useStore } from '../store.js';
@@ -98,7 +99,7 @@ const CARD_RARITIES = ['Common', 'Uncommon', 'Rare', 'Basic', 'Ancient', 'Curse'
 const RELIC_RARITIES = ['Common', 'Ancient', 'Starter'];
 
 export default function Synergies() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
   const [minOcc, setMinOcc] = useState(3);
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<Mode>('floor_delta');
@@ -114,13 +115,13 @@ export default function Synergies() {
   });
 
   const { data, isLoading } = useQuery<{ synergies: Synergy[] }>({
-    queryKey: ['synergies', selectedCharacter, minOcc],
-    queryFn: () => api.getSynergies(selectedCharacter || undefined, minOcc) as Promise<{ synergies: Synergy[] }>,
+    queryKey: ['synergies', selectedCharacter, minOcc, ascension, lastN],
+    queryFn: () => api.getSynergies(selectedCharacter || undefined, minOcc, ascension || undefined, lastN || undefined) as Promise<{ synergies: Synergy[] }>,
   });
 
   const { data: coresData, isLoading: coresLoading } = useQuery<{ cores: Core[] }>({
-    queryKey: ['cores', selectedCharacter, minOcc],
-    queryFn: () => api.getCores(selectedCharacter || undefined, minOcc) as Promise<{ cores: Core[] }>,
+    queryKey: ['cores', selectedCharacter, minOcc, ascension, lastN],
+    queryFn: () => api.getCores(selectedCharacter || undefined, minOcc, ascension || undefined, lastN || undefined) as Promise<{ cores: Core[] }>,
   });
 
   const { data: cachedCards } = useQuery<{ id: string; rarity: string | null; color: string | null }[]>({
@@ -202,6 +203,7 @@ export default function Synergies() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
         <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span className="ctrl-label">Min Runs</span>
           <select value={minOcc} onChange={(e) => setMinOcc(Number(e.target.value))}>

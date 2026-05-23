@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import LineChart from '../components/charts/LineChart.js';
 import { useStore } from '../store.js';
 
 interface FloorStat { floor: number; avg_hp_pct: number | null; avg_gold: number | null; sample_size: number; }
 
 export default function HpGold() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -18,8 +19,8 @@ export default function HpGold() {
   });
 
   const { data, isLoading } = useQuery<{ floors: FloorStat[] }>({
-    queryKey: ['hp-gold', selectedCharacter],
-    queryFn: () => api.getHpGold(selectedCharacter || undefined) as Promise<{ floors: FloorStat[] }>,
+    queryKey: ['hp-gold', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getHpGold(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ floors: FloorStat[] }>,
   });
 
   if (isLoading) return <div className="loading">Loading…</div>;
@@ -44,6 +45,7 @@ export default function HpGold() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
       </div>
 
       <div className="charts-row col1">

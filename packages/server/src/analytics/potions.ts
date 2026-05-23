@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { rf } from './stats-utils.js';
 
 export interface PotionStat {
   potion_id: string;
@@ -11,10 +12,9 @@ export interface PotionStat {
   discard_rate: number | null;
 }
 
-export function getPotionStats(db: Database.Database, character?: string): PotionStat[] {
-  const charJoin = character ? 'JOIN runs r ON r.id = pe.run_id' : '';
-  const charWhere = character ? 'WHERE r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getPotionStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): PotionStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const hasFilter = fR.params.length > 0;
 
   return db.prepare(`
     SELECT
@@ -30,12 +30,12 @@ export function getPotionStats(db: Database.Database, character?: string): Potio
       CAST(SUM(CASE WHEN event_type = 'discarded' THEN 1 ELSE 0 END) AS REAL) /
         NULLIF(SUM(CASE WHEN event_type = 'obtained' THEN 1 ELSE 0 END), 0) AS discard_rate
     FROM potion_events pe
-    ${charJoin}
-    ${charWhere}
+    ${hasFilter ? 'JOIN runs r ON r.id = pe.run_id' : ''}
+    ${fR.where}
     GROUP BY potion_id
     HAVING times_offered >= 2
     ORDER BY times_offered DESC
-  `).all(...params) as PotionStat[];
+  `).all(...fR.params) as PotionStat[];
 }
 
 export interface PotionUsageByRoom {
@@ -43,21 +43,22 @@ export interface PotionUsageByRoom {
   times_used: number;
 }
 
-export function getPotionUsageByRoom(db: Database.Database, character?: string): PotionUsageByRoom[] {
-  const charJoin = character ? 'JOIN runs r ON r.id = pe.run_id' : '';
-  const charWhere = character ? 'WHERE pe.event_type = \'used\' AND r.character = ?' : 'WHERE pe.event_type = \'used\'';
-  const params = character ? [character] : [];
+export function getPotionUsageByRoom(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): PotionUsageByRoom[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const hasFilter = fR.params.length > 0;
+  const whereBase = `WHERE pe.event_type = 'used'`;
+  const whereClause = hasFilter ? `${whereBase} ${fR.and}` : whereBase;
 
   return db.prepare(`
     SELECT
       COALESCE(pe.room_type, 'unknown') AS room_type,
       COUNT(*) AS times_used
     FROM potion_events pe
-    ${charJoin}
-    ${charWhere}
+    ${hasFilter ? 'JOIN runs r ON r.id = pe.run_id' : ''}
+    ${whereClause}
     GROUP BY room_type
     ORDER BY times_used DESC
-  `).all(...params) as PotionUsageByRoom[];
+  `).all(...fR.params) as PotionUsageByRoom[];
 }
 
 export interface PotionBossUsageStat {
@@ -68,10 +69,11 @@ export interface PotionBossUsageStat {
   boss_use_pct: number | null;
 }
 
-export function getPotionBossUsage(db: Database.Database, character?: string): PotionBossUsageStat[] {
-  const charJoin = character ? 'JOIN runs r ON r.id = pe.run_id' : '';
-  const charWhere = character ? 'WHERE pe.event_type = \'used\' AND r.character = ?' : 'WHERE pe.event_type = \'used\'';
-  const params = character ? [character] : [];
+export function getPotionBossUsage(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): PotionBossUsageStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const hasFilter = fR.params.length > 0;
+  const whereBase = `WHERE pe.event_type = 'used'`;
+  const whereClause = hasFilter ? `${whereBase} ${fR.and}` : whereBase;
 
   return db.prepare(`
     SELECT
@@ -81,10 +83,10 @@ export function getPotionBossUsage(db: Database.Database, character?: string): P
       COUNT(*) AS total_used,
       CAST(SUM(CASE WHEN room_type = 'boss' THEN 1 ELSE 0 END) AS REAL) / NULLIF(COUNT(*), 0) AS boss_use_pct
     FROM potion_events pe
-    ${charJoin}
-    ${charWhere}
+    ${hasFilter ? 'JOIN runs r ON r.id = pe.run_id' : ''}
+    ${whereClause}
     GROUP BY potion_id
     HAVING total_used >= 2
     ORDER BY total_used DESC
-  `).all(...params) as PotionBossUsageStat[];
+  `).all(...fR.params) as PotionBossUsageStat[];
 }

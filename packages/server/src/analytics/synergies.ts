@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { STARTING_RELICS } from './relics.js';
+import { rf } from './stats-utils.js';
 
 // Basic/curse cards that appear in every run and add no signal.
 const BASIC_CARDS = new Set([
@@ -41,14 +42,16 @@ export interface Synergy {
 export function getCores(
   db: Database.Database,
   character?: string,
-  minRuns = 3
+  minRuns = 3,
+  ascension?: number,
+  sinceRunId?: number,
 ): Core[] {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const charParams = character ? [character] : [];
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const f = rf({ character, ascension, sinceRunId });
 
   const baselineRows = db.prepare(
-    `SELECT character, AVG(victory) as wr, AVG(floor_reached) as avg_floor FROM runs ${character ? 'WHERE character = ?' : ''} GROUP BY character`
-  ).all(...charParams) as { character: string; wr: number; avg_floor: number }[];
+    `SELECT character, AVG(victory) as wr, AVG(floor_reached) as avg_floor FROM runs ${f.where} GROUP BY character`
+  ).all(...f.params) as { character: string; wr: number; avg_floor: number }[];
   const baseline = new Map(baselineRows.map((r) => [r.character, r]));
 
   // Find relic pairs that anchor winning cores.
@@ -57,7 +60,7 @@ export function getCores(
       SELECT ro.run_id, ro.relic_key
       FROM relics_obtained ro
       JOIN runs r ON r.id = ro.run_id
-      WHERE ${NOT_STARTER_RELIC} ${charAnd}
+      WHERE ${NOT_STARTER_RELIC} ${fR.and}
     )
     SELECT
       r.character,
@@ -72,7 +75,7 @@ export function getCores(
     GROUP BY r.character, a.relic_key, b.relic_key
     HAVING COUNT(*) >= ?
     ORDER BY win_rate DESC, run_count DESC
-  `).all(...STARTING_RELIC_LIST, ...charParams, minRuns) as {
+  `).all(...STARTING_RELIC_LIST, ...fR.params, minRuns) as {
     character: string;
     relic_a: string;
     relic_b: string;
@@ -97,8 +100,8 @@ export function getCores(
       FROM relics_obtained a
       JOIN relics_obtained b ON b.run_id = a.run_id AND b.relic_key = ?
       JOIN runs r ON r.id = a.run_id
-      WHERE a.relic_key = ? ${charAnd}
-    `).all(pair.relic_b, pair.relic_a, ...charParams) as { run_id: number }[];
+      WHERE a.relic_key = ? ${fR.and}
+    `).all(pair.relic_b, pair.relic_a, ...fR.params) as { run_id: number }[];
 
     if (runIds.length < minRuns) continue;
 
@@ -142,16 +145,16 @@ export function getCores(
 export function getSynergies(
   db: Database.Database,
   character?: string,
-  minOccurrences = 5
+  minOccurrences = 5,
+  ascension?: number,
+  sinceRunId?: number,
 ): Synergy[] {
-  const charFilter = character ? 'AND r.character = ?' : '';
-  const params: unknown[] = [];
-  if (character) params.push(character);
-  params.push(minOccurrences);
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const f = rf({ character, ascension, sinceRunId });
 
   const baselineRows = db.prepare(
-    `SELECT character, AVG(victory) as wr, AVG(floor_reached) as avg_floor FROM runs ${character ? 'WHERE character = ?' : ''} GROUP BY character`
-  ).all(...(character ? [character] : [])) as { character: string; wr: number; avg_floor: number }[];
+    `SELECT character, AVG(victory) as wr, AVG(floor_reached) as avg_floor FROM runs ${f.where} GROUP BY character`
+  ).all(...f.params) as { character: string; wr: number; avg_floor: number }[];
 
   const baseline = new Map(baselineRows.map((r) => [r.character, r]));
 
@@ -166,12 +169,11 @@ export function getSynergies(
     FROM card_choices cc
     JOIN relics_obtained ro ON ro.run_id = cc.run_id
     JOIN runs r ON r.id = cc.run_id
-    WHERE cc.was_picked = 1
-      ${charFilter}
+    WHERE cc.was_picked = 1 ${fR.and}
     GROUP BY r.character, cc.card_id, ro.relic_key
     HAVING COUNT(*) >= ?
     ORDER BY win_rate DESC
-  `).all(...params) as Omit<Synergy, 'baseline_wr' | 'lift' | 'baseline_avg_floor' | 'floor_delta'>[];
+  `).all(...fR.params, minOccurrences) as Omit<Synergy, 'baseline_wr' | 'lift' | 'baseline_avg_floor' | 'floor_delta'>[];
 
   return rows.map((row) => {
     const b = baseline.get(row.character);

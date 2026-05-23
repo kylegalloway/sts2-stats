@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { wilsonLower } from './stats-utils.js';
+import { wilsonLower, rf } from './stats-utils.js';
 
 export interface CardStat {
   card_id: string;
@@ -16,9 +16,8 @@ export interface CardElo {
   elo: number;
 }
 
-export function getCardStats(db: Database.Database, character?: string): CardStat[] {
-  const where = character ? 'WHERE r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getCardStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): CardStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
 
   return db.prepare(`
     SELECT
@@ -33,13 +32,11 @@ export function getCardStats(db: Database.Database, character?: string): CardSta
       0 AS quality_score
     FROM card_choices cc
     JOIN runs r ON r.id = cc.run_id
-    ${where}
+    ${fR.where}
     GROUP BY cc.card_id
     ORDER BY pick_rate DESC
-  `).all(...params).map((row: unknown) => {
+  `).all(...fR.params).map((row: unknown) => {
     const r = row as CardStat;
-    // pick_rate has large n (offered), so raw value is stable.
-    // win_rate only has n=picked, so apply Wilson lower bound to dampen small samples.
     return { ...r, quality_score: (r.pick_rate ?? 0) * wilsonLower(Math.round((r.win_rate ?? 0) * r.picked), r.picked) };
   });
 }
@@ -47,6 +44,7 @@ export function getCardStats(db: Database.Database, character?: string): CardSta
 export function getCardElo(db: Database.Database, character?: string): CardElo[] {
   const where = character ? 'WHERE character = ?' : '';
   const params = character ? [character] : [];
+  // ELO is pre-computed from all runs; ascension/lastN don't apply to the precomputed table.
   return db.prepare(`SELECT card_id, elo FROM card_elo ${where} ORDER BY elo DESC`).all(...params) as CardElo[];
 }
 
@@ -63,22 +61,20 @@ export interface CardProgressionStat {
   underrated_score: number;
 }
 
-export function getCardProgressionStats(db: Database.Database, character?: string): CardProgressionStat[] {
-  const charWhere = character ? 'WHERE r.character = ?' : '';
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const params = character ? [character, character, character] : [];
+export function getCardProgressionStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): CardProgressionStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
 
   const rows = db.prepare(`
     WITH global_stats AS (
       SELECT AVG(CAST(floor_reached AS REAL)) as avg_floor
       FROM runs r
-      ${charWhere}
+      ${fR.where}
     ),
     picked_floors AS (
       SELECT DISTINCT cc.run_id, cc.floor
       FROM card_choices cc
       JOIN runs r ON r.id = cc.run_id
-      WHERE cc.was_picked = 1 ${charAnd}
+      WHERE cc.was_picked = 1 ${fR.and}
     )
     SELECT
       cc.card_id,
@@ -92,11 +88,11 @@ export function getCardProgressionStats(db: Database.Database, character?: strin
     FROM card_choices cc
     JOIN runs r ON r.id = cc.run_id
     LEFT JOIN picked_floors pf ON pf.run_id = cc.run_id AND pf.floor = cc.floor AND cc.was_picked = 0
-    ${charWhere}
+    ${fR.where}
     GROUP BY cc.card_id
     HAVING COUNT(DISTINCT cc.run_id) >= 3
     ORDER BY cc.card_id
-  `).all(...params) as Array<{
+  `).all(...fR.params, ...fR.params, ...fR.params) as Array<{
     card_id: string;
     times_offered: number;
     times_picked: number;
@@ -353,11 +349,14 @@ export function getCardStatsByDimension(
   db: Database.Database,
   dimension: CardDimension,
   character?: string,
+  ascension?: number,
+  sinceRunId?: number,
 ): DimensionStat[] {
   const field = `json_extract(c.data_json, '$.${dimension}')`;
-  const charWhere = character ? 'AND r.character = ?' : '';
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const charWhere = fR.and;
   const charAnd2 = character ? 'AND ce.character = ?' : '';
-  const params: unknown[] = character ? [character, character] : [];
+  const params: unknown[] = [...fR.params, ...(character ? [character] : [])];
 
   return db.prepare(`
     SELECT
@@ -398,13 +397,12 @@ function cleanCardId(raw: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function getUpgradeImpact(db: Database.Database, character?: string): UpgradeImpact[] {
-  const charWhere = character ? 'WHERE character = ?' : '';
-  const params: unknown[] = character ? [character] : [];
+export function getUpgradeImpact(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): UpgradeImpact[] {
+  const f = rf({ character, ascension, sinceRunId });
 
   const runs = db.prepare(
-    `SELECT id, raw_json, victory, floor_reached FROM runs ${charWhere}`
-  ).all(...params) as { id: number; raw_json: string; victory: number; floor_reached: number }[];
+    `SELECT id, raw_json, victory, floor_reached FROM runs ${f.where}`
+  ).all(...f.params) as { id: number; raw_json: string; victory: number; floor_reached: number }[];
 
   const buckets = new Map<string, {
     upgraded_wins: number; upgraded_total: number; upgraded_floors: number;
@@ -469,9 +467,10 @@ export interface SkipRateStat {
   skip_rate: number;
 }
 
-export function getSkipRates(db: Database.Database, character?: string): SkipRateStat[] {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getSkipRates(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): SkipRateStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const charAnd = fR.and;
+  const params = fR.params;
 
   return db.prepare(`
     WITH choice_floors AS (
@@ -546,9 +545,10 @@ export interface EnchantmentStat {
   win_rate: number;
 }
 
-export function getEnchantments(db: Database.Database, character?: string): EnchantmentStat[] {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const p = character ? [character] : [];
+export function getEnchantments(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): EnchantmentStat[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
+  const charAnd = fR.and;
+  const p = fR.params;
 
   return db.prepare(`
     SELECT

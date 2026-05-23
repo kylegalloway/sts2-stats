@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
 import { useStore } from '../store.js';
@@ -43,8 +45,12 @@ const ROOM_COLORS: Record<string, string> = {
   rest_site: '#6db3b3',
 };
 
+const MIN_OFFERED_OPTIONS = [1, 2, 3, 5, 10];
+
 export default function Potions() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
+  const [search, setSearch] = useState('');
+  const [minOffered, setMinOffered] = useState(1);
 
   const chars = useQuery<string[]>({
     queryKey: ['characters'],
@@ -55,16 +61,21 @@ export default function Potions() {
   });
 
   const { data, isLoading } = useQuery<PotionsResponse>({
-    queryKey: ['potions', selectedCharacter],
-    queryFn: () => api.getPotions(selectedCharacter || undefined) as Promise<PotionsResponse>,
+    queryKey: ['potions', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getPotions(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<PotionsResponse>,
   });
 
   if (isLoading) return <div className="loading">Loading…</div>;
   if (!data) return null;
 
-  const { stats, usageByRoom, bossUsage } = data;
-  const topByOffered = stats.slice(0, 20);
-  const topUsed = [...stats].sort((a, b) => b.times_used - a.times_used).slice(0, 15);
+  const filteredStats = data.stats.filter((p) => {
+    if (p.times_offered < minOffered) return false;
+    if (search && !p.potion_id.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+  const { usageByRoom, bossUsage } = data;
+  const topByOffered = filteredStats.slice(0, 20);
+  const topUsed = [...filteredStats].sort((a, b) => b.times_used - a.times_used).slice(0, 15);
 
   const statCols: Column<PotionStat>[] = [
     { key: 'potion_id', label: 'Potion', render: (v) => <span>{formatName(v as string)}</span> },
@@ -101,6 +112,24 @@ export default function Potions() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Min Offered</span>
+          <select value={minOffered} onChange={(e) => setMinOffered(Number(e.target.value))}>
+            {MIN_OFFERED_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n}+</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="ctrl-label">Search</span>
+          <input
+            className="search-input"
+            placeholder="Filter potions…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
       </div>
 
       <div className="charts-row col2">
@@ -154,11 +183,11 @@ export default function Potions() {
       <div className="tcard">
         <div className="tcard-head">
           <span className="tcard-title">All Potions</span>
-          <span className="dim" style={{ fontSize: '.75rem' }}>{stats.length} potions</span>
+          <span className="dim" style={{ fontSize: '.75rem' }}>{filteredStats.length} potions</span>
         </div>
         <SortableTable
           columns={statCols}
-          rows={stats}
+          rows={filteredStats}
           defaultSortKey="times_offered"
         />
       </div>

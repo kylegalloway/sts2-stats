@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3';
+import { rf } from './stats-utils.js';
 
-export function getOverview(db: Database.Database, character?: string) {
-  const where = character ? 'WHERE character = ?' : '';
-  const params = character ? [character] : [];
+export function getOverview(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number) {
+  const f = rf({ character, ascension, sinceRunId });
 
   const kpis = db.prepare(`
     SELECT
@@ -11,45 +11,43 @@ export function getOverview(db: Database.Database, character?: string) {
       CAST(SUM(victory) AS REAL) / NULLIF(COUNT(*), 0) AS win_rate,
       AVG(floor_reached) AS avg_floor,
       AVG(run_time) AS avg_run_time
-    FROM runs ${where}
-  `).get(...params);
+    FROM runs ${f.where}
+  `).get(...f.params);
 
   const winByChar = db.prepare(`
     SELECT character, COUNT(*) AS total, SUM(victory) AS wins,
       CAST(SUM(victory) AS REAL) / NULLIF(COUNT(*), 0) AS win_rate
-    FROM runs ${where}
+    FROM runs ${f.where}
     GROUP BY character ORDER BY win_rate DESC
-  `).all(...params);
+  `).all(...f.params);
 
   const timeline = db.prepare(`
     SELECT id, character, victory, floor_reached, timestamp, ascension
-    FROM runs ${where}
+    FROM runs ${f.where}
     ORDER BY timestamp, id
-  `).all(...params);
+  `).all(...f.params);
 
   return { kpis, winByChar, timeline };
 }
 
-export function getActRoutes(db: Database.Database, character?: string) {
-  const where = character ? 'WHERE character = ?' : '';
-  const params = character ? [character] : [];
+export function getActRoutes(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number) {
+  const f = rf({ character, ascension, sinceRunId });
   return db.prepare(`
     SELECT acts, COUNT(*) AS total, SUM(victory) AS wins,
       CAST(SUM(victory) AS REAL) / NULLIF(COUNT(*), 0) AS win_rate
-    FROM runs ${where}
+    FROM runs ${f.where}
     GROUP BY acts ORDER BY total DESC
-  `).all(...params);
+  `).all(...f.params);
 }
 
-export function getAscensionStats(db: Database.Database, character?: string) {
-  const where = character ? 'WHERE character = ?' : '';
-  const params = character ? [character] : [];
+export function getAscensionStats(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number) {
+  const f = rf({ character, ascension, sinceRunId });
   return db.prepare(`
     SELECT ascension, COUNT(*) AS total, SUM(victory) AS wins,
       CAST(SUM(victory) AS REAL) / NULLIF(COUNT(*), 0) AS win_rate
-    FROM runs ${where}
+    FROM runs ${f.where}
     GROUP BY ascension ORDER BY ascension
-  `).all(...params);
+  `).all(...f.params);
 }
 
 export interface WinFingerprint {
@@ -61,11 +59,9 @@ export interface WinFingerprint {
   loss_avg_cards_purged: number | null;
 }
 
-export function getWinFingerprint(db: Database.Database, character?: string): WinFingerprint {
-  const where = character ? 'WHERE character = ?' : '';
-  const p = character ? [character] : [];
-
-  const rows = db.prepare(`
+export function getWinFingerprint(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): WinFingerprint {
+  const f = rf({ character, ascension, sinceRunId });
+  return db.prepare(`
     SELECT
       AVG(CASE WHEN victory = 1 THEN deck_size END) AS win_avg_deck_size,
       AVG(CASE WHEN victory = 0 THEN deck_size END) AS loss_avg_deck_size,
@@ -73,10 +69,8 @@ export function getWinFingerprint(db: Database.Database, character?: string): Wi
       AVG(CASE WHEN victory = 0 AND deck_size > 0 THEN CAST(cards_upgraded AS REAL) / deck_size END) AS loss_avg_upgrade_rate,
       AVG(CASE WHEN victory = 1 THEN cards_removed_count END) AS win_avg_cards_purged,
       AVG(CASE WHEN victory = 0 THEN cards_removed_count END) AS loss_avg_cards_purged
-    FROM runs ${where}
-  `).get(...p) as WinFingerprint;
-
-  return rows;
+    FROM runs ${f.where}
+  `).get(...f.params) as WinFingerprint;
 }
 
 export interface ActVariant {
@@ -86,10 +80,8 @@ export interface ActVariant {
   win_rate: number;
 }
 
-export function getActVariants(db: Database.Database, character?: string): ActVariant[] {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const p = character ? [character] : [];
-
+export function getActVariants(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number): ActVariant[] {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
   return db.prepare(`
     SELECT
       je.value AS act_name,
@@ -97,22 +89,21 @@ export function getActVariants(db: Database.Database, character?: string): ActVa
       SUM(r.victory) AS wins,
       CAST(SUM(r.victory) AS REAL) / NULLIF(COUNT(*), 0) AS win_rate
     FROM runs r, json_each(r.acts) je
-    WHERE r.acts IS NOT NULL ${charAnd}
+    WHERE r.acts IS NOT NULL ${fR.and}
     GROUP BY je.value
     ORDER BY total DESC
-  `).all(...p) as ActVariant[];
+  `).all(...fR.params) as ActVariant[];
 }
 
-export function getPathComposition(db: Database.Database, character?: string) {
-  const charAnd = character ? 'AND r.character = ?' : '';
-  const params = character ? [character] : [];
+export function getPathComposition(db: Database.Database, character?: string, ascension?: number, sinceRunId?: number) {
+  const fR = rf({ character, ascension, sinceRunId }, 'r');
   return db.prepare(`
     SELECT r.victory, fn.act, fn.node_type,
       COUNT(*) AS node_count,
       COUNT(DISTINCT fn.run_id) AS run_count
     FROM floor_nodes fn
     JOIN runs r ON r.id = fn.run_id
-    WHERE fn.node_type IN ('elite', 'rest_site', 'shop', 'boss') ${charAnd}
+    WHERE fn.node_type IN ('elite', 'rest_site', 'shop', 'boss') ${fR.and}
     GROUP BY r.victory, fn.act, fn.node_type
-  `).all(...params);
+  `).all(...fR.params);
 }

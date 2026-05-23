@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client.js';
 import CharacterSelect from '../components/shared/CharacterSelect.js';
+import GlobalFilters from '../components/shared/GlobalFilters.js';
 import EntityTooltip from '../components/shared/EntityTooltip.js';
 import SortableTable, { type Column } from '../components/shared/SortableTable.js';
 import HBarChart from '../components/charts/HBarChart.js';
@@ -23,7 +24,7 @@ interface EnemyInflectionStat {
 const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 
 export default function Deaths() {
-  const { selectedCharacter, setSelectedCharacter } = useStore();
+  const { selectedCharacter, setSelectedCharacter, ascension, lastN } = useStore();
   const [search, setSearch] = useState('');
 
   const chars = useQuery<string[]>({
@@ -35,18 +36,18 @@ export default function Deaths() {
   });
 
   const { data, isLoading } = useQuery<{ kills: KillStat[] }>({
-    queryKey: ['kills', selectedCharacter],
-    queryFn: () => api.getKills(selectedCharacter || undefined) as Promise<{ kills: KillStat[] }>,
+    queryKey: ['kills', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getKills(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ kills: KillStat[] }>,
   });
 
   const { data: bossData } = useQuery<{ bosses: BossStat[] }>({
-    queryKey: ['boss-stats', selectedCharacter],
-    queryFn: () => api.getBossStats(selectedCharacter || undefined) as Promise<{ bosses: BossStat[] }>,
+    queryKey: ['boss-stats', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getBossStats(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ bosses: BossStat[] }>,
   });
 
   const { data: inflectionData } = useQuery<{ enemies: EnemyInflectionStat[] }>({
-    queryKey: ['enemy-inflection', selectedCharacter],
-    queryFn: () => api.getEnemyInflection(selectedCharacter || undefined) as Promise<{ enemies: EnemyInflectionStat[] }>,
+    queryKey: ['enemy-inflection', selectedCharacter, ascension, lastN],
+    queryFn: () => api.getEnemyInflection(selectedCharacter || undefined, ascension || undefined, lastN || undefined) as Promise<{ enemies: EnemyInflectionStat[] }>,
   });
 
   const cols: Column<KillStat>[] = [
@@ -109,6 +110,7 @@ export default function Deaths() {
           onChange={setSelectedCharacter}
           characters={chars.data ?? []}
         />
+        <GlobalFilters />
         <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span className="ctrl-label">Search</span>
           <input
