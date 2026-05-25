@@ -88,7 +88,7 @@ export default function RunLog() {
     },
     {
       key: 'timestamp', label: 'Date',
-      render: (v) => <span className="dim">{v ? new Date(String(v)).toLocaleDateString() : '—'}</span>,
+      render: (v) => <span className="dim">{v ? new Date(Number(v) * 1000).toLocaleDateString() : '—'}</span>,
     },
   ];
 

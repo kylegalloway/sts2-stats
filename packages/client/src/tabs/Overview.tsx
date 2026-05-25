@@ -129,7 +129,7 @@ export default function Overview() {
     { key: 'victory', label: 'Result', render: (v) => v ? <span className="badge-win">Win</span> : <span className="badge-loss">Loss</span> },
     { key: 'ascension', label: 'Asc', render: (v) => <span className="num">{String(v)}</span> },
     { key: 'floor_reached', label: 'Floor', render: (v) => <span className="num">{String(v)}</span> },
-    { key: 'timestamp', label: 'Date', render: (v) => <span className="dim">{v ? new Date(String(v)).toLocaleDateString() : '—'}</span> },
+    { key: 'timestamp', label: 'Date', render: (v) => <span className="dim">{v ? new Date(Number(v) * 1000).toLocaleDateString() : '—'}</span> },
   ];
 
   const routeRows = (routes ?? []).map((r) => ({
